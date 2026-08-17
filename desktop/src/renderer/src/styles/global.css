@@ -2,20 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
+:root,
+body,
+#root {
+  width: 100%;
+  min-width: 800px;
+  height: 100%;
+  min-height: 600px;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: #101214;
+  color: #e6e9ec;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+button {
+  font: inherit;
+}
+
+.app-shell {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+}
+
+.app-shell__body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.app-shell__content {
+  min-width: 0;
+  flex: 1;
+  overflow-y: auto;
+  background: #171a1d;
+}
+
 .title-bar {
   display: flex;
   height: 36px;
+  flex: none;
   align-items: center;
   justify-content: space-between;
-  background: #f5f5f5;
-  color: #1f1f1f;
+  border-bottom: 1px solid #343a40;
+  background: #101214;
+  color: #e6e9ec;
   user-select: none;
   -webkit-app-region: drag;
-}
-
-.title-bar__controls,
-.title-bar__controls button {
-  -webkit-app-region: no-drag;
 }
 
 .title-bar__brand {
@@ -24,11 +61,25 @@
   gap: 8px;
   padding: 0 12px;
   font-size: 13px;
+  font-weight: 600;
+}
+
+.title-bar__mark {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #00d1ce;
+  border-radius: 4px;
+  background: #0b3f40;
+}
+
+.title-bar__controls,
+.title-bar__controls button {
+  -webkit-app-region: no-drag;
 }
 
 .title-bar__controls {
   display: flex;
-  align-self: stretch;
+  height: 100%;
 }
 
 .title-bar__controls button {
@@ -37,20 +88,78 @@
   place-items: center;
   border: 0;
   background: transparent;
-  color: inherit;
+  color: #9aa3ab;
   cursor: pointer;
 }
 
 .title-bar__controls button:hover {
-  background: #e5e5e5;
+  background: #252a2f;
+  color: #e6e9ec;
 }
 
 .title-bar__controls button:focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid #00d1ce;
   outline-offset: -2px;
 }
 
 .title-bar__controls .title-bar__close:hover {
-  background: #e81123;
-  color: #ffffff;
+  background: #d87878;
+  color: #101214;
+}
+
+.sidebar {
+  width: 208px;
+  flex: none;
+  border-right: 1px solid #343a40;
+  background: #101214;
+}
+
+.sidebar__brand {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 20px 16px;
+  border-bottom: 1px solid #343a40;
+  color: #e6e9ec;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.sidebar__brand small {
+  color: #6f7881;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.sidebar__nav {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.sidebar__link {
+  display: flex;
+  height: 38px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #9aa3ab;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.sidebar__link:hover {
+  border-color: #343a40;
+  background: #1e2226;
+  color: #e6e9ec;
+}
+
+.sidebar__link--active {
+  border-color: rgb(0 209 206 / 50%);
+  background: #0b3f40;
+  color: #00d1ce;
 }

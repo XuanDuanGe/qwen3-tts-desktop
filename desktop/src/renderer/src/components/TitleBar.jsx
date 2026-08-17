@@ -23,7 +23,7 @@ export default function TitleBar() {
   return (
     <header className="title-bar">
       <div className="title-bar__brand">
-        <FiMinimize2 aria-hidden="true" />
+        <span className="title-bar__mark" aria-hidden="true" />
         <span>Qwen TTS Desktop</span>
       </div>
       <div className="title-bar__controls">
