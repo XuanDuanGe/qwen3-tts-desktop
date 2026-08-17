@@ -1,1 +1,0 @@
-{"default":{"identifier":"default","description":"主窗口默认能力：自定义标题栏所需的窗口控制权限","local":true,"windows":["main"],"permissions":["core:default","core:window:allow-start-dragging","core:window:allow-minimize","core:window:allow-maximize","core:window:allow-unmaximize","core:window:allow-toggle-maximize","core:window:allow-close"]}}

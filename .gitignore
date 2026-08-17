@@ -1,15 +1,45 @@
-node_modules/
-dist/
-dist-ssr/
-*.local
-src-tauri/target/
+# Node / Vite
+/node_modules/
+/dist/
+/coverage/
+/desktop/node_modules/
+/desktop/dist/
+/desktop/dist-ssr/
+/desktop/coverage/
+*.log
+pnpm-debug.log*
+
+# Environment
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Editor
 .vscode/
 .idea/
+*.iml
+
+# Operating system
 .DS_Store
+Thumbs.db
 
-# 日志与本地工具目录
-logs/
-.zcode/
+# Rust / Tauri
+/desktop/src-tauri/target/
+*.pdb
 
-# 参考项目
-samples/
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local runtime data
+/.local/
+/logs/
+/models/
+/outputs/
+/cache/
+/temp/

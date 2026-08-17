@@ -1,34 +1,56 @@
-# qwen3-tts-desktop
+# Qwen3 TTS Desktop
 
-qwen3-tts-desktop 是一个基于 Tauri 2、React、JavaScript 与 Vite 的桌面端语音工具界面原型，当前已包含自定义窗口栏、左侧导航和四个基础子页面。
+Qwen TTS 的 Tauri 2 桌面客户端。当前仓库使用 pnpm workspace 管理，`desktop/` 包承载 React 前端与 Tauri Rust host。
 
 ## 启动
 
+在仓库根目录：
+
 ```bash
-pnpm install
+pnpm dev
+```
+
+或进入桌面应用目录：
+
+```bash
+cd desktop
 pnpm tauri dev
 ```
 
 ## 构建
 
+在仓库根目录：
+
 ```bash
+pnpm build
+```
+
+或进入桌面应用目录：
+
+```bash
+cd desktop
 pnpm tauri build
 ```
 
-## 当前前端结构
+## 目录结构
 
 ```text
-src/
-├── components/          自定义窗口栏、导航栏与布局组件
-├── pages/               首页、语音生成、语音克隆、设置页面
-├── routes/              Hash 路由配置
-└── styles/              Tailwind 与全局样式
-
-src-tauri/
-├── capabilities/        Tauri 权限能力配置
-├── src/
-│   ├── lib.rs           Tauri 应用入口
-│   └── main.rs          桌面端启动入口
-├── Cargo.toml           Rust 依赖配置
-└── tauri.conf.json      Tauri 应用配置
+.
+├── desktop/
+│   ├── src/
+│   │   ├── api/           Tauri 命令调用封装
+│   │   ├── components/    通用 React 组件
+│   │   ├── pages/         页面组件
+│   │   ├── routes/        路由配置
+│   │   ├── store/         Zustand 全局状态
+│   │   ├── styles/        全局样式
+│   │   └── utils/         前端工具函数
+│   └── src-tauri/
+│       └── src/
+│           ├── commands/  Tauri 命令
+│           ├── models/    Rust 数据模型
+│           └── utils/     Rust 工具函数
+├── core/                  后续桌面核心能力
+├── contracts/             后续跨层协议契约
+└── docs/                  架构与开发文档
 ```
