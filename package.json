@@ -2,11 +2,14 @@
   "name": "qwen3-tts-desktop-workspace",
   "private": true,
   "scripts": {
-    "dev": "scripts\\run-tauri-msvc.cmd --filter qwen3-tts-desktop tauri dev",
-    "build": "scripts\\run-tauri-msvc.cmd --filter qwen3-tts-desktop tauri build",
-    "lint": "pnpm --filter qwen3-tts-desktop lint",
-    "format": "pnpm --filter qwen3-tts-desktop format",
-    "format:check": "pnpm --filter qwen3-tts-desktop format:check"
+    "dev": "pnpm --dir desktop dev",
+    "build": "pnpm --dir desktop build",
+    "preview": "pnpm --dir desktop preview",
+    "lint": "pnpm --dir desktop lint",
+    "format": "pnpm --dir desktop format"
   },
-  "packageManager": "pnpm@10.15.0"
+  "packageManager": "pnpm@11.15.1",
+  "dependencies": {
+    "electron": "^43.4.0"
+  }
 }

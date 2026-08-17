@@ -1,0 +1,8 @@
+{
+  appId: 'com.qwen3.tts.desktop',
+  productName: 'Qwen3 TTS Desktop',
+  directories: {
+    output: 'release',
+  },
+  files: ['dist-electron/**', 'dist/**'],
+}

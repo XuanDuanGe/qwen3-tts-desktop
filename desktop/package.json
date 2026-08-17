@@ -1,39 +1,39 @@
 {
   "name": "qwen3-tts-desktop",
-  "private": true,
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "桌面工具",
+  "private": true,
   "type": "module",
+  "main": "dist-electron/index.js",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && electron-builder",
     "preview": "vite preview",
-    "tauri": "tauri",
     "lint": "eslint .",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format": "prettier --write ."
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.8.0",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "react-icons": "^5.5.0",
-    "react-router-dom": "^7.8.2",
-    "zustand": "^5.0.8"
+    "electron": "^43.4.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-icons": "^5.7.0",
+    "react-router-dom": "^7.18.2",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@eslint/js": "^9.34.0",
-    "@tauri-apps/cli": "^2.8.4",
-    "@vitejs/plugin-react": "^5.0.2",
-    "autoprefixer": "^10.4.21",
-    "eslint": "^9.34.0",
+    "@eslint/js": "^9.39.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "autoprefixer": "^10.5.4",
+    "electron-builder": "^24.13.3",
+    "eslint": "^9.39.1",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "eslint-plugin-react-refresh": "^0.4.20",
-    "globals": "^16.3.0",
-    "postcss": "^8.5.6",
-    "prettier": "^3.6.2",
-    "tailwindcss": "^3.4.17",
-    "vite": "^7.1.3"
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "postcss": "^8.5.26",
+    "prettier": "^3.9.6",
+    "prettier-eslint": "^17.1.1",
+    "tailwindcss": "^3.4.19",
+    "vite": "^5.4.21",
+    "vite-plugin-electron": "^0.28.8",
+    "vite-plugin-electron-renderer": "^0.14.7"
   }
 }

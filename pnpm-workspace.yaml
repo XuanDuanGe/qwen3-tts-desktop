@@ -1,2 +1,6 @@
 packages:
   - desktop
+
+allowBuilds:
+  electron: true
+  esbuild: true
