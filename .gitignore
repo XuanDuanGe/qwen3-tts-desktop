@@ -7,3 +7,6 @@ src-tauri/target/
 .idea/
 .DS_Store
 *.log
+
+# 参考项目
+samples/

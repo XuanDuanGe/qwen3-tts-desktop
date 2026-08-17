@@ -1,10 +1,16 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import AppRoutes from './routes/AppRoutes';
+import AppLayout from './components/AppLayout';
 import './styles/global.css';
 
-createRoot(document.getElementById('root')).render(
+const root = document.getElementById('root');
+
+if (!root) {
+  throw new Error('未找到应用根节点。');
+}
+
+createRoot(root).render(
   <StrictMode>
-    <AppRoutes />
+    <AppLayout />
   </StrictMode>
 );

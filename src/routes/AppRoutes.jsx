@@ -1,4 +1,4 @@
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import HomePage from '../pages/HomePage';
 import SettingsPage from '../pages/SettingsPage';
 import VoiceClonePage from '../pages/VoiceClonePage';
@@ -6,14 +6,12 @@ import VoiceGeneratePage from '../pages/VoiceGeneratePage';
 
 export default function AppRoutes() {
   return (
-    <HashRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/voice-generate" element={<VoiceGeneratePage />} />
-        <Route path="/voice-clone" element={<VoiceClonePage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </HashRouter>
+    <Routes>
+      <Route element={<HomePage />} path="/" />
+      <Route element={<VoiceGeneratePage />} path="/voice-generate" />
+      <Route element={<VoiceClonePage />} path="/voice-clone" />
+      <Route element={<SettingsPage />} path="/settings" />
+      <Route element={<Navigate replace to="/" />} path="*" />
+    </Routes>
   );
 }

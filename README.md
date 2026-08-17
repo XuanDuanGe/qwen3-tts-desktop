@@ -1,6 +1,6 @@
 # qwen3-tts-desktop
 
-qwen3-tts-desktop 是一个基于 Tauri 2、React、JavaScript 与 Vite 的桌面工具，提供语音生成、声音克隆和应用设置页面的基础结构。
+qwen3-tts-desktop 是一个基于 Tauri 2、React、JavaScript 与 Vite 的桌面端语音工具界面原型，当前已包含自定义窗口栏、左侧导航和四个基础子页面。
 
 ## 启动
 
@@ -15,23 +15,20 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
-## 目录结构
+## 当前前端结构
 
 ```text
 src/
-├── api/                 Tauri 命令调用封装
-├── components/          通用 React 组件
-├── pages/               页面组件
+├── components/          自定义窗口栏、导航栏与布局组件
+├── pages/               首页、语音生成、语音克隆、设置页面
 ├── routes/              Hash 路由配置
-├── store/               Zustand 全局状态
-├── styles/              Tailwind 与全局样式
-└── utils/               工具函数
+└── styles/              Tailwind 与全局样式
 
 src-tauri/
+├── capabilities/        Tauri 权限能力配置
 ├── src/
-│   ├── commands/        Rust 命令
-│   ├── models/           Rust 数据模型
-│   └── utils/            Rust 工具函数
-├── Cargo.toml            Rust 依赖配置
-└── tauri.conf.json       Tauri 应用配置
+│   ├── lib.rs           Tauri 应用入口
+│   └── main.rs          桌面端启动入口
+├── Cargo.toml           Rust 依赖配置
+└── tauri.conf.json      Tauri 应用配置
 ```
