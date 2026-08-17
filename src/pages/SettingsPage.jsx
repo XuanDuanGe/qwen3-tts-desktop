@@ -1,17 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { usePageTelemetry } from '../hooks/usePageTelemetry';
+import { measure, remark, track } from '../utils/telemetry';
 
 export default function SettingsPage() {
+  usePageTelemetry('settings');
+
   const [downloadDir, setDownloadDir] = useState('');
   const [status, setStatus] = useState('设置仅保存在当前界面。');
 
+  useEffect(() => {
+    remark('settings.session', { page: 'settings' });
+  }, []);
+
   const save = (event) => {
     event.preventDefault();
-    setStatus(downloadDir.trim() ? '设置已暂存' : '请输入有效目录');
+    const nextStatus = downloadDir.trim() ? '设置已暂存' : '请输入有效目录';
+    setStatus(nextStatus);
+    measure('settings.save.elapsed', 'settings.session', {
+      hasDownloadDir: Boolean(downloadDir.trim()),
+    });
+    track('settings.save', {
+      hasDownloadDir: Boolean(downloadDir.trim()),
+      downloadDirLength: downloadDir.length,
+      status: nextStatus,
+    });
   };
 
   const cancel = () => {
     setDownloadDir('');
     setStatus('已取消未保存更改');
+    track('settings.cancel', { page: 'settings' });
   };
 
   return (
@@ -31,7 +49,12 @@ export default function SettingsPage() {
           语音下载目录
           <input
             className="mt-2 w-full rounded-ui border border-border bg-canvas px-3 py-2 text-text outline-none transition-colors focus:border-primary"
-            onChange={(event) => setDownloadDir(event.target.value)}
+            onChange={(event) => {
+              setDownloadDir(event.target.value);
+              track('settings.download-dir.change', {
+                valueLength: event.target.value.length,
+              });
+            }}
             placeholder="输入目录路径"
             value={downloadDir}
           />

@@ -6,7 +6,10 @@ src-tauri/target/
 .vscode/
 .idea/
 .DS_Store
-*.log
+
+# 日志与本地工具目录
+logs/
+.zcode/
 
 # 参考项目
 samples/

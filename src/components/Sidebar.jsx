@@ -1,6 +1,7 @@
 import { HiHome, HiMicrophone, HiOutlineCog6Tooth } from 'react-icons/hi2';
 import { RiVoiceprintLine } from 'react-icons/ri';
 import { NavLink } from 'react-router-dom';
+import { track } from '../utils/telemetry';
 
 const navigationItems = [
   { to: '/', label: '首页', icon: HiHome, end: true },
@@ -30,6 +31,7 @@ export default function Sidebar() {
             }
             end={end}
             key={to}
+            onClick={() => track('navigation.click', { target: to, label })}
             to={to}
           >
             <Icon aria-hidden="true" className="h-[18px] w-[18px] shrink-0" />

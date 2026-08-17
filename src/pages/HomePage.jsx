@@ -1,4 +1,14 @@
+import { useEffect } from 'react';
+import { usePageTelemetry } from '../hooks/usePageTelemetry';
+import { trackOnce } from '../utils/telemetry';
+
 export default function HomePage() {
+  usePageTelemetry('home');
+
+  useEffect(() => {
+    trackOnce('page.home.ready', { page: 'home' });
+  }, []);
+
   return (
     <section className="mx-auto w-full max-w-6xl p-6 lg:p-8">
       <header className="border-b border-border pb-5">
