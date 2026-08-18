@@ -38,6 +38,83 @@ button {
   background: #171a1d;
 }
 
+.status-bar {
+  display: flex;
+  height: 30px;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-top: 1px solid #343a40;
+  background: #101214;
+  color: #9aa3ab;
+  font-size: 11px;
+  user-select: none;
+}
+
+.status-bar__engine,
+.status-bar__github {
+  display: inline-flex;
+  align-items: center;
+}
+
+.status-bar__engine {
+  gap: 7px;
+}
+
+.status-bar__indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6f7881;
+}
+
+.status-bar__indicator--success {
+  background: #67c587;
+  box-shadow: 0 0 0 0 rgba(103, 197, 135, 0.5);
+  animation: status-bar-pulse 2.2s ease-in-out infinite;
+}
+
+.status-bar__indicator--warning {
+  background: #e7c66a;
+  box-shadow: 0 0 0 0 rgba(231, 198, 106, 0.5);
+  animation: status-bar-pulse 1.7s ease-in-out infinite;
+}
+
+.status-bar__indicator--error {
+  background: #d87878;
+  box-shadow: 0 0 0 0 rgba(216, 120, 120, 0.5);
+  animation: status-bar-pulse 1.7s ease-in-out infinite;
+}
+
+.status-bar__github {
+  gap: 6px;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid #343a40;
+  border-radius: 999px;
+  color: #c5ccd2;
+  text-decoration: none;
+}
+
+.status-bar__github:hover {
+  border-color: #00d1ce;
+  background: #1e2226;
+  color: #00d1ce;
+}
+
+.status-bar__github:focus-visible {
+  outline: 2px solid #00d1ce;
+  outline-offset: 2px;
+}
+
+@keyframes status-bar-pulse {
+  50% {
+    box-shadow: 0 0 0 4px transparent;
+    opacity: 0.65;
+  }
+}
+
 .title-bar {
   display: flex;
   height: 36px;
@@ -348,14 +425,9 @@ button {
   letter-spacing: 0.14em;
 }
 
-.voice-generate__status,
 .voice-generate__job-status {
   color: #9aa3ab;
   font-size: 12px;
-}
-
-.voice-generate__status--ready {
-  color: #00d1ce;
 }
 
 .voice-generate__form,

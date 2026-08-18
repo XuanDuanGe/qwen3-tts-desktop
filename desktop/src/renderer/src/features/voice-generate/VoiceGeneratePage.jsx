@@ -226,11 +226,6 @@ export default function VoiceGeneratePage() {
           <p className="voice-generate__eyebrow">QWEN3 TTS</p>
           <h1>声音生成</h1>
         </div>
-        <span
-          className={`voice-generate__status voice-generate__status--${status}`}
-        >
-          引擎：{status}
-        </span>
       </header>
       <form className="voice-generate__form" onSubmit={handleSubmit}>
         <label className="voice-generate__field">

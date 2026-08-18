@@ -7,6 +7,7 @@ import VoiceClonePage from '../pages/VoiceClonePage';
 import VoiceGeneratePage from '../features/voice-generate/VoiceGeneratePage';
 import AudioFilesPage from '../pages/AudioFilesPage';
 import Sidebar from '../layout/Sidebar';
+import StatusBar from '../layout/StatusBar';
 import TitleBar from '../layout/TitleBar';
 
 export default function AppRoutes() {
@@ -29,6 +30,7 @@ export default function AppRoutes() {
             </Routes>
           </main>
         </div>
+        <StatusBar />
       </div>
     </HashRouter>
   );
