@@ -15,6 +15,8 @@ export default [
       globals: {
         window: 'readonly',
         document: 'readonly',
+        Blob: 'readonly',
+        URL: 'readonly',
       },
       parserOptions: {
         ecmaFeatures: {
@@ -44,6 +46,10 @@ export default [
       sourceType: 'module',
       globals: {
         process: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        URL: 'readonly',
       },
     },
   },

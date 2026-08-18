@@ -15,10 +15,10 @@ class RuntimePaths:
     def prepare(self):
         for path in (self.models, self.outputs, self.temp, self.references, self.logs, self.cache):
             path.mkdir(parents=True, exist_ok=True)
-        os.environ.setdefault("HF_HOME", str(self.cache / "huggingface"))
-        os.environ.setdefault("MODELSCOPE_CACHE", str(self.cache / "modelscope"))
-        os.environ.setdefault("TORCH_HOME", str(self.cache / "torch"))
-        os.environ.setdefault("TRITON_CACHE_DIR", str(self.cache / "triton"))
+        os.environ["HF_HOME"] = str(self.cache / "huggingface")
+        os.environ["MODELSCOPE_CACHE"] = str(self.cache / "modelscope")
+        os.environ["TORCH_HOME"] = str(self.cache / "torch")
+        os.environ["TRITON_CACHE_DIR"] = str(self.cache / "triton")
 
     def model_path(self, model_id):
         return self.models / model_id

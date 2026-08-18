@@ -5,10 +5,12 @@ import HomePage from '../pages/HomePage';
 import SettingsPage from '../pages/SettingsPage';
 import VoiceClonePage from '../pages/VoiceClonePage';
 import VoiceGeneratePage from '../pages/VoiceGeneratePage';
+import TelemetryTracker from '../components/TelemetryTracker';
 
 export default function AppRoutes() {
   return (
     <HashRouter>
+      <TelemetryTracker />
       <div className="app-shell">
         <TitleBar />
         <div className="app-shell__body">

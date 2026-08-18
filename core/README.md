@@ -4,12 +4,11 @@
 
 ## 安装
 
-在仓库根目录创建并激活 Python 虚拟环境后安装：
+在仓库根目录创建虚拟环境并安装：
 
 ```bash
 python -m venv .venv
-. .venv/Scripts/activate
-python -m pip install -e core
+.venv/Scripts/python.exe -m pip install -e core
 ```
 
 PyTorch 的 CUDA 版本应根据目标机器单独选择。模型不会在安装依赖时自动下载。

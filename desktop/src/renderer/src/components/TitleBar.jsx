@@ -6,11 +6,13 @@ import {
   minimizeWindow,
   toggleMaximizeWindow,
 } from '../api/windowControls';
+import { track } from '../api/telemetry';
 
 export default function TitleBar() {
   const [isMaximized, setIsMaximized] = useState(false);
 
   useEffect(() => {
+    track('component_used', { component: 'title_bar' }, { once: true });
     isWindowMaximized()
       .then(setIsMaximized)
       .catch(() => undefined);

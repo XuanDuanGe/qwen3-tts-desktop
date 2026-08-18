@@ -15,7 +15,13 @@ class JobQueue:
 
     def submit(self, params):
         job_id = str(uuid.uuid4())
-        job = {"jobId": job_id, "status": "queued", "progress": 0}
+        job = {
+            "jobId": job_id,
+            "status": "queued",
+            "stage": "waiting",
+            "message": "正在等待前序任务",
+            "progress": 0,
+        }
         self.jobs[job_id] = {"data": job, "params": params, "cancelled": False}
         self.pending.put(job_id)
         self.emit("job.updated", job)
@@ -34,8 +40,7 @@ class JobQueue:
             raise ValueError("job not found") from exc
         item["cancelled"] = True
         if item["data"]["status"] == "queued":
-            item["data"]["status"] = "cancelled"
-            self.emit("job.updated", item["data"])
+            self._update(item, "cancelled", item["data"]["progress"], "cancelled", "任务已取消")
         return item["data"]
 
     def close(self):
@@ -52,16 +57,38 @@ class JobQueue:
             if item["cancelled"]:
                 continue
             try:
-                self._update(item, "preparing", 0.1)
-                result = self.handler(item["params"], item)
-                self._update(item, "succeeded", 1, result)
+                result = self.handler(item["params"], item, self._progress(item))
+                self._update(item, "succeeded", 1, "completed", "生成完成", result)
             except Exception as exc:
                 status = "cancelled" if str(exc) == "cancelled" else "failed"
-                item["data"].update({"status": status, "error": str(exc)})
-                self.emit("job.updated", item["data"])
+                stage = "cancelled" if status == "cancelled" else "failed"
+                message = "任务已取消" if status == "cancelled" else f"生成失败：{exc}"
+                self._update(
+                    item,
+                    status,
+                    item["data"]["progress"],
+                    stage,
+                    message,
+                    error=str(exc),
+                )
 
-    def _update(self, item, status, progress, result=None):
-        item["data"].update({"status": status, "progress": progress})
+    def _progress(self, item):
+        def update(status, progress, stage, message):
+            self._update(item, status, progress, stage, message)
+
+        return update
+
+    def _update(self, item, status, progress, stage, message, result=None, error=None):
+        item["data"].update(
+            {
+                "status": status,
+                "stage": stage,
+                "message": message,
+                "progress": progress,
+            }
+        )
         if result is not None:
             item["data"]["result"] = result
+        if error is not None:
+            item["data"]["error"] = error
         self.emit("job.updated", item["data"])

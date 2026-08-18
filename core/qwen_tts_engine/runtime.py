@@ -1,4 +1,5 @@
 import gc
+import sys
 
 
 class QwenRuntime:
@@ -8,9 +9,12 @@ class QwenRuntime:
         self.model = None
         self.model_id = None
 
+    def is_loaded(self, model_id):
+        return self.model_id == model_id and self.model is not None
+
     def load(self, model_id, model_path):
-        if self.model_id == model_id and self.model is not None:
-            return
+        if self.is_loaded(model_id):
+            return False
         self.unload()
         try:
             import torch
@@ -19,11 +23,23 @@ class QwenRuntime:
             raise RuntimeError("qwen-tts runtime dependencies are not installed") from exc
         if not model_path.is_dir():
             raise FileNotFoundError(f"model is not installed: {model_id}")
-        load_kwargs = {"device_map": self.device}
-        if self.dtype != "auto":
-            load_kwargs["dtype"] = getattr(torch, self.dtype)
+        device = self.device
+        dtype = self.dtype
+        if device == "auto" and not torch.cuda.is_available():
+            device = "cpu"
+        if device == "cpu" and dtype == "bfloat16":
+            dtype = "float32"
+        print(
+            f"[engine] runtime load model={model_id} device={device} dtype={dtype} cuda={torch.cuda.is_available()}",
+            file=sys.stderr,
+            flush=True,
+        )
+        load_kwargs = {"device_map": device}
+        if dtype != "auto":
+            load_kwargs["dtype"] = getattr(torch, dtype)
         self.model = Qwen3TTSModel.from_pretrained(str(model_path), **load_kwargs)
         self.model_id = model_id
+        return True
 
     def unload(self):
         self.model = None

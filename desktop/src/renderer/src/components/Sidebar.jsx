@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { HiHome, HiMicrophone, HiOutlineCog6Tooth } from 'react-icons/hi2';
 import { RiVoiceprintLine } from 'react-icons/ri';
 import { NavLink } from 'react-router-dom';
+import { track } from '../api/telemetry';
 
 const items = [
   { to: '/', label: '首页', icon: HiHome, end: true },
@@ -10,6 +12,9 @@ const items = [
 ];
 
 export default function Sidebar() {
+  useEffect(() => {
+    track('component_used', { component: 'sidebar' }, { once: true });
+  }, []);
   return (
     <aside className="sidebar">
       <div className="sidebar__brand">

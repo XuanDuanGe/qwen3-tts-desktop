@@ -16,7 +16,7 @@ class ArtifactStore:
         artifact_id = str(uuid.uuid4())
         target = self.paths.artifact_path(artifact_id)
         temporary = target.with_suffix(".tmp.wav")
-        sf.write(temporary, wavs[0], sample_rate)
+        sf.write(temporary, wavs[0], sample_rate, format="WAV")
         os.replace(temporary, target)
         artifact = {
             "artifactId": artifact_id,
