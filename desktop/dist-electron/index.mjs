@@ -24,6 +24,7 @@ function createEngineApi() {
       cancel: (jobId) => electron.ipcRenderer.invoke("jobs:cancel", jobId)
     },
     artifacts: {
+      list: () => electron.ipcRenderer.invoke("artifacts:list"),
       get: (artifactId) => electron.ipcRenderer.invoke("artifacts:get", artifactId),
       delete: (artifactId) => electron.ipcRenderer.invoke("artifacts:delete", artifactId),
       read: (artifactId) => electron.ipcRenderer.invoke("artifacts:read", artifactId),
@@ -32,6 +33,12 @@ function createEngineApi() {
     onStatus: (listener) => subscribe(subscriptions.engineStatus, listener),
     onJobUpdated: (listener) => subscribe(subscriptions.jobUpdated, listener),
     onArtifactCreated: (listener) => subscribe(subscriptions.artifactCreated, listener)
+  };
+}
+function createSettingsApi() {
+  return {
+    get: () => electron.ipcRenderer.invoke("settings:get"),
+    save: (settings) => electron.ipcRenderer.invoke("settings:save", settings)
   };
 }
 function createTelemetryApi() {
@@ -52,5 +59,6 @@ electron.contextBridge.exposeInMainWorld("api", {
   platform: process.platform,
   telemetry: createTelemetryApi(),
   engine: createEngineApi(),
+  settings: createSettingsApi(),
   ...createWindowApi()
 });

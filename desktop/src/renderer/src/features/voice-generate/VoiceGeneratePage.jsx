@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FiDownload } from 'react-icons/fi';
 import { downloadArtifact, readArtifact } from '../../api/engine';
+import { getSettings } from '../../api/settings';
 import { track } from '../../api/telemetry';
 import useEngineStore from '../../store/engineStore';
 import useJobStore from '../../store/jobStore';
+import useMessageStore from '../../store/messageStore';
 import { CUSTOM_VOICE_MODELS, JOB_STATUS_TEXT } from './constants';
+import useVoiceGenerateFormStore from './store';
 import { toBytes } from './utils';
 
 export default function VoiceGeneratePage() {
@@ -15,6 +18,7 @@ export default function VoiceGeneratePage() {
   const jobs = useJobStore((state) => state.jobs);
   const submit = useJobStore((state) => state.submit);
   const storeError = useJobStore((state) => state.error);
+  const pushMessage = useMessageStore((state) => state.push);
   const availableModels = useMemo(
     () =>
       models.filter(
@@ -24,22 +28,15 @@ export default function VoiceGeneratePage() {
       ),
     [models],
   );
-  const [modelId, setModelId] = useState('');
-  const [capabilities, setCapabilities] = useState({
-    speakers: [],
-    languages: [],
-  });
-  const [text, setText] = useState('');
-  const [instruct, setInstruct] = useState('');
-  const [speaker, setSpeaker] = useState('');
-  const [language, setLanguage] = useState('Auto');
-  const [splitByLine, setSplitByLine] = useState(false);
+  const form = useVoiceGenerateFormStore((state) => state.form);
+  const setForm = useVoiceGenerateFormStore((state) => state.setForm);
+  const { modelId, capabilities, text, instruct, speaker, language, splitByLine } = form;
   const [jobId, setJobId] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
   const [pageError, setPageError] = useState('');
   const [loadingCapabilities, setLoadingCapabilities] = useState(false);
   const [installingModel, setInstallingModel] = useState(false);
-  const [proxy, setProxy] = useState('http://127.0.0.1:7897');
+  const [modelDownloadProxy, setModelDownloadProxy] = useState('');
 
   const job = jobId ? jobs[jobId] : null;
   const generating = Boolean(
@@ -50,9 +47,38 @@ export default function VoiceGeneratePage() {
   );
   const currentArtifact = job?.status === 'succeeded' ? job.result : null;
   const jobMessage = job?.message || JOB_STATUS_TEXT[job?.status] || '处理中';
+  const [now, setNow] = useState(0);
+  const isActiveJob = Boolean(
+    job && ['preparing', 'running'].includes(job.status) && job.startedAt,
+  );
+  const elapsedSeconds = isActiveJob
+    ? now
+      ? ((now / 1000) - job.startedAt).toFixed(1)
+      : '0.0'
+    : '';
 
   useEffect(() => {
     track('component_used', { component: 'voice_generate_page' }, { once: true });
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    getSettings()
+      .then((settings) => {
+        if (!active) {
+          return;
+        }
+        setModelDownloadProxy(settings.modelDownloadProxy || '');
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
+        setPageError(error.message);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -87,25 +113,46 @@ export default function VoiceGeneratePage() {
     [audioUrl],
   );
 
+  useEffect(() => {
+    if (!isActiveJob) {
+      return undefined;
+    }
+    const timer = globalThis.setInterval(() => setNow(Date.now()), 100);
+    return () => globalThis.clearInterval(timer);
+  }, [isActiveJob, jobId]);
+
   function handleModelChange(event) {
-    setModelId(event.target.value);
-    setCapabilities({ speakers: [], languages: [] });
-    setSpeaker('');
-    setLanguage('Auto');
+    setForm({
+      modelId: event.target.value,
+      capabilities: { speakers: [], languages: [] },
+      speaker: '',
+      language: 'Auto',
+    });
   }
 
   async function handleCapabilities() {
     if (!modelId) return;
+    const requestedModelId = modelId;
     setLoadingCapabilities(true);
     setPageError('');
+    pushMessage({ level: 'info', content: '开始加载模型能力。' });
     try {
-      const result = await getCapabilities(modelId);
+      const result = await getCapabilities(requestedModelId);
       track('model_capabilities_requested', { success: true });
-      setCapabilities(result);
-      setSpeaker(result.speakers[0] || '');
-      setLanguage(result.languages[0] || 'Auto');
+      if (
+        useVoiceGenerateFormStore.getState().form.modelId !== requestedModelId
+      ) {
+        return;
+      }
+      setForm({
+        capabilities: result,
+        speaker: result.speakers[0] || '',
+        language: result.languages[0] || 'Auto',
+      });
+      pushMessage({ level: 'success', content: '模型能力已加载。' });
     } catch (error) {
       setPageError(error.message);
+      pushMessage({ level: 'error', content: `加载模型能力失败：${error.message}` });
     } finally {
       setLoadingCapabilities(false);
     }
@@ -131,8 +178,11 @@ export default function VoiceGeneratePage() {
     setInstallingModel(!selectedModel?.installed);
     try {
       if (!selectedModel?.installed) {
-        await installModel(modelId, proxy.trim() || undefined);
+        pushMessage({ level: 'info', content: '开始加载模型。' });
+        await installModel(modelId, modelDownloadProxy.trim() || undefined);
+        pushMessage({ level: 'success', content: '模型加载成功。' });
       }
+      pushMessage({ level: 'info', content: '开始语音生成任务。' });
       const nextJob = await submit({
         kind: 'custom_voice',
         modelId,
@@ -146,18 +196,26 @@ export default function VoiceGeneratePage() {
     } catch (error) {
       track('generation_failed', { code: error.code || 'unknown' });
       setPageError(error.message);
+      pushMessage({ level: 'error', content: `操作失败：${error.message}` });
     } finally {
       setInstallingModel(false);
     }
   }
 
   async function handleDownload() {
+    if (!currentArtifact?.artifactId) {
+      return;
+    }
+    setPageError('');
+    pushMessage({ level: 'info', content: '开始下载音频文件。' });
     try {
       await downloadArtifact(currentArtifact.artifactId);
       track('artifact_downloaded', { success: true });
+      pushMessage({ level: 'success', content: '音频文件下载完成。' });
     } catch (error) {
       track('generation_failed', { code: error.code || 'unknown' });
       setPageError(error.message);
+      pushMessage({ level: 'error', content: `下载音频文件失败：${error.message}` });
     }
   }
 
@@ -187,16 +245,6 @@ export default function VoiceGeneratePage() {
             ))}
           </select>
         </label>
-        <label className="voice-generate__field">
-          <span>模型下载代理</span>
-          <input
-            type="text"
-            value={proxy}
-            onChange={(event) => setProxy(event.target.value)}
-            placeholder="http://127.0.0.1:7897"
-          />
-          <small>仅用于模型下载，留空表示不使用代理。</small>
-        </label>
         <button
           className="voice-generate__secondary-button"
           type="button"
@@ -210,7 +258,7 @@ export default function VoiceGeneratePage() {
           <textarea
             rows="6"
             value={text}
-            onChange={(event) => setText(event.target.value)}
+            onChange={(event) => setForm({ text: event.target.value })}
             placeholder="输入要转换为语音的文本"
           />
         </label>
@@ -219,7 +267,7 @@ export default function VoiceGeneratePage() {
           <textarea
             rows="3"
             value={instruct}
-            onChange={(event) => setInstruct(event.target.value)}
+            onChange={(event) => setForm({ instruct: event.target.value })}
             placeholder="可选，例如：用温柔、自然的语气朗读"
           />
         </label>
@@ -227,7 +275,7 @@ export default function VoiceGeneratePage() {
           <span>发言人</span>
           <select
             value={speaker}
-            onChange={(event) => setSpeaker(event.target.value)}
+            onChange={(event) => setForm({ speaker: event.target.value })}
           >
             <option value="">请先获取模型能力</option>
             {capabilities.speakers.map((item) => (
@@ -241,7 +289,7 @@ export default function VoiceGeneratePage() {
           <span>语言</span>
           <select
             value={language}
-            onChange={(event) => setLanguage(event.target.value)}
+            onChange={(event) => setForm({ language: event.target.value })}
           >
             {capabilities.languages.length ? (
               capabilities.languages.map((item) => (
@@ -261,7 +309,7 @@ export default function VoiceGeneratePage() {
               type="radio"
               name="splitByLine"
               checked={!splitByLine}
-              onChange={() => setSplitByLine(false)}
+              onChange={() => setForm({ splitByLine: false })}
             />
             否
           </label>
@@ -270,7 +318,7 @@ export default function VoiceGeneratePage() {
               type="radio"
               name="splitByLine"
               checked={splitByLine}
-              onChange={() => setSplitByLine(true)}
+              onChange={() => setForm({ splitByLine: true })}
             />
             是
           </label>
@@ -293,6 +341,7 @@ export default function VoiceGeneratePage() {
       {job && (
         <p className="voice-generate__job-status">
           任务状态：{jobMessage}（{Math.round((job.progress || 0) * 100)}%）
+          {isActiveJob ? ` · 已运行 ${elapsedSeconds} s` : ''}
         </p>
       )}
       {currentArtifact && (

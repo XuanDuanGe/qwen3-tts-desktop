@@ -1,9 +1,11 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
+import MessageHost from '../app/MessageHost';
 import TelemetryTracker from '../app/TelemetryTracker';
 import HomePage from '../pages/HomePage';
 import SettingsPage from '../pages/SettingsPage';
 import VoiceClonePage from '../pages/VoiceClonePage';
 import VoiceGeneratePage from '../features/voice-generate/VoiceGeneratePage';
+import AudioFilesPage from '../pages/AudioFilesPage';
 import Sidebar from '../layout/Sidebar';
 import TitleBar from '../layout/TitleBar';
 
@@ -11,6 +13,7 @@ export default function AppRoutes() {
   return (
     <HashRouter>
       <TelemetryTracker />
+      <MessageHost />
       <div className="app-shell">
         <TitleBar />
         <div className="app-shell__body">
@@ -20,6 +23,7 @@ export default function AppRoutes() {
               <Route path="/" element={<HomePage />} />
               <Route path="/voice-generate" element={<VoiceGeneratePage />} />
               <Route path="/voice-clone" element={<VoiceClonePage />} />
+              <Route path="/audio-files" element={<AudioFilesPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

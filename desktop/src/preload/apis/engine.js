@@ -28,6 +28,7 @@ export function createEngineApi() {
       cancel: (jobId) => ipcRenderer.invoke('jobs:cancel', jobId),
     },
     artifacts: {
+      list: () => ipcRenderer.invoke('artifacts:list'),
       get: (artifactId) => ipcRenderer.invoke('artifacts:get', artifactId),
       delete: (artifactId) => ipcRenderer.invoke('artifacts:delete', artifactId),
       read: (artifactId) => ipcRenderer.invoke('artifacts:read', artifactId),

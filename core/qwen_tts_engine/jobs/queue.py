@@ -1,5 +1,6 @@
 import queue
 import threading
+import time
 import uuid
 
 
@@ -10,10 +11,13 @@ class JobQueue:
         self.jobs = {}
         self.pending = queue.Queue()
         self.stop_event = threading.Event()
+        self.closed = False
         self.worker = threading.Thread(target=self._run, daemon=True)
         self.worker.start()
 
     def submit(self, params):
+        if self.closed:
+            raise RuntimeError("queue is closed")
         job_id = str(uuid.uuid4())
         job = {
             "jobId": job_id,
@@ -44,9 +48,23 @@ class JobQueue:
         return item["data"]
 
     def close(self):
+        if self.closed:
+            return not self.worker.is_alive()
+        self.closed = True
         self.stop_event.set()
+        for item in self.jobs.values():
+            item["cancelled"] = True
+            if item["data"]["status"] == "queued":
+                self._update(
+                    item,
+                    "cancelled",
+                    item["data"]["progress"],
+                    "cancelled",
+                    "任务已取消",
+                )
         self.pending.put(None)
         self.worker.join(timeout=5)
+        return not self.worker.is_alive()
 
     def _run(self):
         while not self.stop_event.is_set():
@@ -57,8 +75,18 @@ class JobQueue:
             if item["cancelled"]:
                 continue
             try:
+                item["data"]["startedAt"] = time.time()
                 result = self.handler(item["params"], item, self._progress(item))
-                self._update(item, "succeeded", 1, "completed", "生成完成", result)
+                if item["cancelled"]:
+                    self._update(
+                        item,
+                        "cancelled",
+                        item["data"]["progress"],
+                        "cancelled",
+                        "任务已取消",
+                    )
+                else:
+                    self._update(item, "succeeded", 1, "completed", "生成完成", result)
             except Exception as exc:
                 status = "cancelled" if str(exc) == "cancelled" else "failed"
                 stage = "cancelled" if status == "cancelled" else "failed"

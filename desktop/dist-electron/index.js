@@ -1,8 +1,8 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import { constants, mkdirSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
-import { access, readFile, copyFile } from "node:fs/promises";
-import { spawn } from "node:child_process";
+import { access, writeFile, readFile, unlink, mkdir, copyFile, readdir, stat } from "node:fs/promises";
+import { spawn, execFile } from "node:child_process";
 import { EventEmitter } from "node:events";
 const workspaceRoot = join(app.getAppPath(), "..");
 function getEnginePaths() {
@@ -49,24 +49,45 @@ function parseMessage(line) {
   return message;
 }
 const REQUEST_TIMEOUT = 3e4;
+const STARTUP_REQUEST_TIMEOUT = 12e4;
 const MODEL_INSTALL_TIMEOUT = 30 * 60 * 1e3;
-const SHUTDOWN_TIMEOUT = 3e3;
+const SHUTDOWN_TIMEOUT = 6e3;
+const EXIT_TIMEOUT = 2e3;
+const STARTUP_EXIT_TIMEOUT = 15e3;
 class EngineManager extends EventEmitter {
-  constructor(logger2) {
+  constructor(logger) {
     super();
-    this.logger = logger2;
+    this.logger = logger;
     this.child = null;
     this.pending = /* @__PURE__ */ new Map();
     this.sequence = 0;
     this.status = "stopped";
     this.buffer = "";
     this.stopping = false;
+    this.ready = false;
+    this.stopRequested = false;
+    this.startPromise = null;
+    this.stopPromise = null;
   }
   async start() {
-    var _a, _b, _c, _d, _e;
+    if (this.stopping || this.stopRequested) {
+      throw new Error("Engine is stopping");
+    }
     if (this.child) {
       return this.status;
     }
+    if (this.startPromise) {
+      return this.startPromise;
+    }
+    this.startPromise = this.startEngine();
+    try {
+      return await this.startPromise;
+    } finally {
+      this.startPromise = null;
+    }
+  }
+  async startEngine() {
+    var _a, _b, _c, _d, _e;
     const paths = getEnginePaths();
     (_a = this.logger) == null ? void 0 : _a.info("engine", `starting engine (${paths.packaged ? "packaged" : "development"})`);
     if (!paths.packaged) {
@@ -92,40 +113,62 @@ class EngineManager extends EventEmitter {
     ];
     this.status = "starting";
     this.emit("status", this.status);
-    this.child = spawn(paths.command, args, {
+    if (this.stopRequested) {
+      throw new Error("Engine shutdown requested");
+    }
+    const child = spawn(paths.command, args, {
       cwd: paths.cwd,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true
     });
-    (_c = this.logger) == null ? void 0 : _c.info("engine", `sidecar started pid=${this.child.pid}`);
-    this.child.stdout.setEncoding("utf8");
-    this.child.stderr.setEncoding("utf8");
-    this.child.stdout.on("data", (chunk) => this.handleStdout(chunk));
-    this.child.stderr.on("data", (chunk) => this.emit("stderr", chunk));
-    this.child.once("error", (error) => {
-      this.emit(
-        "stderr",
-        `Failed to start engine (${paths.command}, cwd: ${paths.cwd}): ${error.message}
-`
-      );
-      this.handleExit(error);
+    this.child = child;
+    (_c = this.logger) == null ? void 0 : _c.info("engine", `sidecar started pid=${child.pid}`);
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => this.handleStdout(chunk));
+    child.stderr.on("data", (chunk) => {
+      if (!this.stopRequested) {
+        this.emit("stderr", chunk);
+      }
     });
-    this.child.once("exit", (code, signal) => {
+    child.once("error", (error) => {
+      if (!this.stopRequested) {
+        this.emit(
+          "stderr",
+          `Failed to start engine (${paths.command}, cwd: ${paths.cwd}): ${error.message}
+`
+        );
+      }
+      this.handleExit(child, error);
+    });
+    child.once("exit", (code, signal) => {
       this.handleExit(
+        child,
         new Error(
           `Engine exited with code ${code ?? "unknown"}${signal ? ` (${signal})` : ""}`
         )
       );
     });
     try {
-      await this.request("engine.hello");
-      await this.request("engine.health");
+      await this.request("engine.hello", {}, STARTUP_REQUEST_TIMEOUT);
+      await this.request("engine.health", {}, STARTUP_REQUEST_TIMEOUT);
+      if (this.stopRequested) {
+        throw new Error("Engine shutdown requested");
+      }
+      this.ready = true;
       this.status = "ready";
       (_d = this.logger) == null ? void 0 : _d.info("engine", "engine ready");
       this.emit("status", this.status);
       return this.status;
     } catch (error) {
-      this.stopChild();
+      if (this.stopRequested) {
+        throw error;
+      }
+      await this.forceStop(child);
+      if (!await this.waitForExit(child, STARTUP_EXIT_TIMEOUT)) {
+        await this.forceStop(child, true);
+        await this.waitForExit(child, EXIT_TIMEOUT);
+      }
       this.status = "unavailable";
       (_e = this.logger) == null ? void 0 : _e.error("engine", `startup failed: ${error.message}`);
       this.emit("status", this.status, error);
@@ -134,6 +177,9 @@ class EngineManager extends EventEmitter {
   }
   request(method, params = {}, timeout = REQUEST_TIMEOUT) {
     var _a, _b, _c;
+    if ((this.stopping || this.stopRequested) && method !== "engine.shutdown") {
+      return Promise.reject(new Error("Engine is stopping"));
+    }
     if (!((_b = (_a = this.child) == null ? void 0 : _a.stdin) == null ? void 0 : _b.writable)) {
       return Promise.reject(new Error("Engine is not running"));
     }
@@ -149,7 +195,11 @@ class EngineManager extends EventEmitter {
       const timer = setTimeout(() => {
         var _a2;
         this.pending.delete(requestId);
-        (_a2 = this.logger) == null ? void 0 : _a2.error("engine", `request ${method} timed out after ${timeout}ms`);
+        const phase = method === "engine.hello" || method === "engine.health" ? "startup handshake" : "request";
+        (_a2 = this.logger) == null ? void 0 : _a2.error(
+          "engine",
+          `${phase} ${method} timed out after ${timeout}ms`
+        );
         reject(new Error(`Engine request timed out: ${method}`));
       }, timeout);
       this.pending.set(requestId, {
@@ -170,18 +220,45 @@ class EngineManager extends EventEmitter {
       });
     });
   }
-  async stop() {
-    if (!this.child) {
+  stop() {
+    this.stopRequested = true;
+    if (!this.stopPromise) {
+      this.stopPromise = this.stopEngine();
+    }
+    return this.stopPromise;
+  }
+  async stopEngine() {
+    var _a, _b, _c;
+    const child = this.child;
+    if (!child) {
+      this.ready = false;
       this.status = "stopped";
       return;
     }
     this.stopping = true;
-    try {
-      await this.request("engine.shutdown", {}, SHUTDOWN_TIMEOUT);
-    } catch {
-      this.stopChild();
+    const wasReady = this.ready;
+    if (!wasReady) {
+      this.closeStdin(child);
+    } else {
+      try {
+        await this.request("engine.shutdown", {}, SHUTDOWN_TIMEOUT);
+      } catch (error) {
+        if (this.child === child) {
+          (_a = this.logger) == null ? void 0 : _a.warn("engine", `graceful shutdown failed: ${error.message}`);
+        }
+      }
     }
-    this.stopChild();
+    const exitTimeout = wasReady ? EXIT_TIMEOUT : STARTUP_EXIT_TIMEOUT;
+    if (!await this.waitForExit(child, exitTimeout)) {
+      (_b = this.logger) == null ? void 0 : _b.warn("engine", `sidecar did not exit gracefully pid=${child.pid}`);
+      await this.forceStop(child);
+      if (!await this.waitForExit(child, EXIT_TIMEOUT)) {
+        await this.forceStop(child, true);
+        if (!await this.waitForExit(child, EXIT_TIMEOUT)) {
+          (_c = this.logger) == null ? void 0 : _c.error("engine", `sidecar did not exit after forced stop pid=${child.pid}`);
+        }
+      }
+    }
     this.status = "stopped";
     this.emit("status", this.status);
   }
@@ -231,12 +308,13 @@ class EngineManager extends EventEmitter {
       }
     }
   }
-  handleExit(error) {
+  handleExit(child, error) {
     var _a;
-    if (!this.child) {
+    if (this.child !== child) {
       return;
     }
     this.child = null;
+    this.ready = false;
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
       pending.reject(error);
@@ -248,21 +326,69 @@ class EngineManager extends EventEmitter {
       this.emit("status", this.status, error);
     }
   }
-  stopChild() {
-    if (this.child && !this.child.killed) {
-      this.child.kill();
+  closeStdin(child) {
+    if (child.stdin && !child.stdin.destroyed && !child.stdin.writableEnded) {
+      child.stdin.end();
     }
-    this.child = null;
+  }
+  waitForExit(child, timeout) {
+    if (this.child !== child) {
+      return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        child.removeListener("exit", onExit);
+        resolve(this.child !== child);
+      }, timeout);
+      const onExit = () => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+      child.once("exit", onExit);
+    });
+  }
+  async forceStop(child, force = false) {
+    if (this.child !== child || !child.pid) {
+      return;
+    }
+    if (process.platform === "win32") {
+      await new Promise((resolve) => {
+        execFile(
+          "taskkill",
+          ["/PID", String(child.pid), "/T", "/F"],
+          { windowsHide: true },
+          (error) => {
+            var _a;
+            if (error) {
+              (_a = this.logger) == null ? void 0 : _a.warn("engine", `taskkill failed: ${error.message}`);
+            }
+            resolve();
+          }
+        );
+      });
+      return;
+    }
+    if (!child.killed) {
+      child.kill(force ? "SIGKILL" : "SIGTERM");
+    }
   }
 }
-function registerEngineEvents(engine2, logger2, getWindow2) {
-  engine2.on("status", (status) => {
-    var _a;
-    (_a = getWindow2()) == null ? void 0 : _a.webContents.send("engine:status-changed", status);
+function registerEngineEvents(engine, logger, getWindow2) {
+  function send(channel, payload) {
+    const window = getWindow2();
+    if (!window || window.isDestroyed() || window.webContents.isDestroyed()) {
+      return;
+    }
+    try {
+      window.webContents.send(channel, payload);
+    } catch {
+    }
+  }
+  engine.on("status", (status) => {
+    send("engine:status-changed", status);
   });
-  engine2.on("event", (message) => {
-    var _a;
-    logger2.debug("engine", `event ${message.event}`);
+  engine.on("event", (message) => {
+    logger.debug("engine", `event ${message.event}`);
     const channel = {
       "job.updated": "engine:job-updated",
       "artifact.created": "engine:artifact-created"
@@ -271,16 +397,16 @@ function registerEngineEvents(engine2, logger2, getWindow2) {
       return;
     }
     if (message.event === "artifact.created") {
-      logger2.info("artifact", "artifact created received; forwarding to renderer");
+      logger.info("artifact", "artifact created received; forwarding to renderer");
     }
-    (_a = getWindow2()) == null ? void 0 : _a.webContents.send(channel, message.payload);
+    send(channel, message.payload);
     if (message.event === "artifact.created") {
-      logger2.info("artifact", "artifact forwarded to renderer for preview");
+      logger.info("artifact", "artifact forwarded to renderer for preview");
     }
   });
-  engine2.on("stderr", (message) => {
+  engine.on("stderr", (message) => {
     for (const line of message.split(/\r?\n/)) {
-      if (line.trim()) logger2.warn("python", line.trim());
+      if (line.trim()) logger.warn("python", line.trim());
     }
   });
 }
@@ -310,52 +436,188 @@ function requireObject(value, name) {
   }
   return value;
 }
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-function requireArtifactId(artifactId) {
-  const value = requireString(artifactId, "artifactId");
-  if (!UUID_PATTERN.test(value)) {
-    throw new Error("artifactId must be a valid UUID");
-  }
-  return value.toLowerCase();
+function getDefaultSettings() {
+  return {
+    modelDownloadProxy: "http://127.0.0.1:7897",
+    audioDownloadDir: join(app.getPath("music"), "qwen3-tts-downloads")
+  };
 }
-function getArtifactPath(artifactId) {
-  return join(getEnginePaths().appData, "outputs", `${artifactId}.wav`);
+function getConfigPath() {
+  return join(app.getPath("userData"), "config.json");
 }
-async function requireArtifactFile(artifactId) {
-  const path = getArtifactPath(artifactId);
+async function readSettings() {
   try {
-    await access(path, constants.R_OK);
+    const raw = await readFile(getConfigPath(), "utf8");
+    return normalizeSettings(JSON.parse(raw));
   } catch {
-    throw new Error("Artifact not found");
+    return getDefaultSettings();
   }
-  return path;
+}
+function normalizeSettings(value) {
+  const defaults = getDefaultSettings();
+  const source = value && typeof value === "object" ? value : {};
+  const modelDownloadProxy = typeof source.modelDownloadProxy === "string" ? source.modelDownloadProxy.trim() : defaults.modelDownloadProxy;
+  const audioDownloadDir = typeof source.audioDownloadDir === "string" && source.audioDownloadDir.trim() ? source.audioDownloadDir.trim() : defaults.audioDownloadDir;
+  return {
+    modelDownloadProxy,
+    audioDownloadDir
+  };
+}
+function registerSettingsHandlers() {
+  ipcMain.handle("settings:get", async (event) => {
+    validateSender(event);
+    return readSettings();
+  });
+  ipcMain.handle("settings:save", async (event, settings) => {
+    validateSender(event);
+    const nextSettings = normalizeSettings(requireObject(settings, "settings"));
+    await writeFile(
+      getConfigPath(),
+      `${JSON.stringify(nextSettings, null, 2)}
+`,
+      "utf8"
+    );
+    return nextSettings;
+  });
+}
+function pad(value) {
+  return String(value).padStart(2, "0");
+}
+function formatDownloadFileName(date = /* @__PURE__ */ new Date()) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate()
+  )}-${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}.wav`;
+}
+function getOutputsDir() {
+  return join(getEnginePaths().appData, "outputs");
+}
+function getArtifactJsonPath(artifactId) {
+  return join(getOutputsDir(), `${artifactId}.json`);
+}
+function getArtifactAudioPath(fileName) {
+  return join(getOutputsDir(), fileName);
+}
+async function readJson(path) {
+  try {
+    return JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+async function buildRecord(artifactId, fileName, meta, fileStat) {
+  return {
+    artifactId,
+    fileName,
+    mimeType: typeof (meta == null ? void 0 : meta.mimeType) === "string" ? meta.mimeType : "audio/wav",
+    sampleRate: typeof (meta == null ? void 0 : meta.sampleRate) === "number" ? meta.sampleRate : void 0,
+    createdAt: typeof (meta == null ? void 0 : meta.createdAt) === "number" ? meta.createdAt : fileStat.mtimeMs
+  };
+}
+async function loadArtifactRecord(artifactId) {
+  const metaPath = getArtifactJsonPath(artifactId);
+  const meta = await readJson(metaPath);
+  if (meta) {
+    const fileName = typeof meta.fileName === "string" && meta.fileName.trim() ? meta.fileName.trim() : `${artifactId}.wav`;
+    const audioPath = getArtifactAudioPath(fileName);
+    try {
+      await access(audioPath, constants.R_OK);
+      return buildRecord(
+        typeof meta.artifactId === "string" && meta.artifactId.trim() ? meta.artifactId.trim() : artifactId,
+        fileName,
+        meta,
+        await stat(audioPath)
+      );
+    } catch {
+      return null;
+    }
+  }
+  const fallbackName = `${artifactId}.wav`;
+  const fallbackPath = getArtifactAudioPath(fallbackName);
+  try {
+    await access(fallbackPath, constants.R_OK);
+    return buildRecord(artifactId, fallbackName, null, await stat(fallbackPath));
+  } catch {
+    return null;
+  }
+}
+async function listArtifactRecords() {
+  await mkdir(getOutputsDir(), { recursive: true });
+  const entries = await readdir(getOutputsDir(), { withFileTypes: true });
+  const records = [];
+  const seenFiles = /* @__PURE__ */ new Set();
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".json") || entry.name.endsWith(".tmp.json")) {
+      continue;
+    }
+    const artifactId = entry.name.replace(/\.json$/i, "");
+    const record = await loadArtifactRecord(artifactId);
+    if (!record) {
+      continue;
+    }
+    records.push(record);
+    seenFiles.add(record.fileName);
+  }
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".wav") || entry.name.endsWith(".tmp.wav") || seenFiles.has(entry.name)) {
+      continue;
+    }
+    const filePath = getArtifactAudioPath(entry.name);
+    const fileStat = await stat(filePath);
+    records.push(
+      await buildRecord(entry.name.replace(/\.wav$/i, ""), entry.name, null, fileStat)
+    );
+  }
+  records.sort((left, right) => (right.createdAt || 0) - (left.createdAt || 0));
+  return records;
 }
 function registerArtifactHandlers(manager) {
-  ipcMain.handle("artifacts:get", (event, artifactId) => {
-    const engine2 = getManager(event, manager);
-    return engine2.request("artifacts.get", {
-      artifactId: requireArtifactId(artifactId)
-    });
+  ipcMain.handle("artifacts:list", async (event) => {
+    validateSender(event);
+    return { artifacts: await listArtifactRecords() };
   });
-  ipcMain.handle("artifacts:delete", (event, artifactId) => {
-    const engine2 = getManager(event, manager);
-    return engine2.request("artifacts.delete", {
-      artifactId: requireArtifactId(artifactId)
-    });
+  ipcMain.handle("artifacts:get", async (event, artifactId) => {
+    getManager(event, manager);
+    const record = await loadArtifactRecord(requireString(artifactId, "artifactId"));
+    if (!record) {
+      throw new Error("Artifact not found");
+    }
+    return record;
+  });
+  ipcMain.handle("artifacts:delete", async (event, artifactId) => {
+    getManager(event, manager);
+    const normalizedArtifactId = requireString(artifactId, "artifactId");
+    const record = await loadArtifactRecord(normalizedArtifactId);
+    if (!record) {
+      throw new Error("Artifact not found");
+    }
+    await Promise.all([
+      unlink(getArtifactAudioPath(record.fileName)).catch(() => void 0),
+      unlink(getArtifactJsonPath(normalizedArtifactId)).catch(() => void 0)
+    ]);
+    return { deleted: true };
   });
   ipcMain.handle("artifacts:read", async (event, artifactId) => {
     validateSender(event);
-    const path = await requireArtifactFile(requireArtifactId(artifactId));
-    return readFile(path);
+    const record = await loadArtifactRecord(requireString(artifactId, "artifactId"));
+    if (!record) {
+      throw new Error("Artifact not found");
+    }
+    return readFile(getArtifactAudioPath(record.fileName));
   });
   ipcMain.handle("artifacts:download", async (event, artifactId) => {
     validateSender(event);
-    const normalizedArtifactId = requireArtifactId(artifactId);
-    const source = await requireArtifactFile(normalizedArtifactId);
-    const fileName = `qwen3-tts-${normalizedArtifactId}.wav`;
-    const target = join(app.getPath("downloads"), fileName);
-    await copyFile(source, target);
-    return { fileName };
+    const normalizedArtifactId = requireString(artifactId, "artifactId");
+    const record = await loadArtifactRecord(normalizedArtifactId);
+    if (!record) {
+      throw new Error("Artifact not found");
+    }
+    const settings = await readSettings();
+    const downloadDir = settings.audioDownloadDir;
+    const fileName = formatDownloadFileName();
+    const target = join(downloadDir, fileName);
+    await mkdir(downloadDir, { recursive: true });
+    await copyFile(getArtifactAudioPath(record.fileName), target);
+    return { fileName, target };
   });
 }
 function requireProxy(value) {
@@ -435,6 +697,7 @@ const TELEMETRY_ROUTES = /* @__PURE__ */ new Set([
   "home",
   "voice_generate",
   "voice_clone",
+  "audio_files",
   "settings"
 ]);
 const TELEMETRY_COMPONENTS = /* @__PURE__ */ new Set([
@@ -444,6 +707,7 @@ const TELEMETRY_COMPONENTS = /* @__PURE__ */ new Set([
   "home_page",
   "voice_generate_page",
   "voice_clone_page",
+  "audio_files_page",
   "settings_page"
 ]);
 function validateProperties(event, properties = {}) {
@@ -465,13 +729,13 @@ function validateProperties(event, properties = {}) {
   }
   return result;
 }
-function registerTelemetryHandler(logger2) {
+function registerTelemetryHandler(logger) {
   ipcMain.handle("telemetry:track", (event, name, properties) => {
     if (typeof name !== "string" || !TELEMETRY_EVENTS.has(name)) {
       throw new Error("invalid telemetry event");
     }
     const safeProperties = validateProperties(name, properties);
-    logger2.info("telemetry", `${name} ${JSON.stringify(safeProperties)}`);
+    logger.info("telemetry", `${name} ${JSON.stringify(safeProperties)}`);
     return { tracked: true };
   });
 }
@@ -501,17 +765,18 @@ function registerWindowControlHandlers() {
     return ((_a = getWindow(event)) == null ? void 0 : _a.isMaximized()) ?? false;
   });
 }
-function registerHandlers(engine2, logger2) {
+function registerHandlers(engine, logger) {
   registerGreetHandler();
-  registerEngineHandlers(engine2);
-  registerArtifactHandlers(engine2);
+  registerEngineHandlers(engine);
+  registerArtifactHandlers(engine);
+  registerSettingsHandlers();
   registerWindowControlHandlers();
-  registerTelemetryHandler(logger2);
+  registerTelemetryHandler(logger);
 }
 const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
 function timestamp(date = /* @__PURE__ */ new Date()) {
-  const pad = (value, size = 2) => String(value).padStart(size, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+  const pad2 = (value, size = 2) => String(value).padStart(size, "0");
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}-${pad2(date.getHours())}-${pad2(date.getMinutes())}-${pad2(date.getSeconds())}`;
 }
 function lineTimestamp(date = /* @__PURE__ */ new Date()) {
   return `${timestamp(date)}.${String(date.getMilliseconds()).padStart(3, "0")}`;
@@ -574,46 +839,78 @@ function createWindow() {
   }
   return window;
 }
-const enginePaths = getEnginePaths();
-const sessionDataPath = join(enginePaths.appData, "session-data");
-mkdirSync(enginePaths.appData, { recursive: true });
-mkdirSync(enginePaths.cache, { recursive: true });
-mkdirSync(sessionDataPath, { recursive: true });
-app.setPath("userData", enginePaths.appData);
-app.setPath("cache", enginePaths.cache);
-app.setPath("sessionData", sessionDataPath);
-const logger = createLogger(enginePaths.appData);
-const engine = new EngineManager(logger);
-let mainWindow;
-let quitting = false;
-app.whenReady().then(async () => {
-  logger.info("app", "application ready");
-  registerHandlers(engine, logger);
-  registerEngineEvents(engine, logger, () => mainWindow);
-  mainWindow = createWindow();
-  try {
-    await engine.start();
-  } catch (error) {
-    logger.error("app", `engine startup failed: ${error.message}`);
-  }
-  app.on("activate", () => {
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  const enginePaths = getEnginePaths();
+  const sessionDataPath = join(enginePaths.appData, "session-data");
+  mkdirSync(enginePaths.appData, { recursive: true });
+  mkdirSync(enginePaths.cache, { recursive: true });
+  mkdirSync(sessionDataPath, { recursive: true });
+  app.setPath("userData", enginePaths.appData);
+  app.setPath("cache", enginePaths.cache);
+  app.setPath("sessionData", sessionDataPath);
+  const logger = createLogger(enginePaths.appData);
+  const engine = new EngineManager(logger);
+  let mainWindow;
+  let shutdownPromise;
+  let quitRequested = false;
+  let quitApproved = false;
+  app.on("second-instance", () => {
     if (!mainWindow || mainWindow.isDestroyed()) {
-      mainWindow = createWindow();
+      return;
+    }
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.show();
+    mainWindow.focus();
+  });
+  app.whenReady().then(async () => {
+    if (quitRequested) {
+      return;
+    }
+    logger.info("app", "application ready");
+    registerHandlers(engine, logger);
+    registerEngineEvents(engine, logger, () => mainWindow);
+    mainWindow = createWindow();
+    try {
+      await engine.start();
+    } catch (error) {
+      if (!quitRequested) {
+        logger.error("app", `engine startup failed: ${error.message}`);
+      }
+    }
+    if (quitRequested) {
+      return;
+    }
+    app.on("activate", () => {
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        mainWindow = createWindow();
+      }
+    });
+  });
+  app.on("before-quit", (event) => {
+    quitRequested = true;
+    if (quitApproved) {
+      return;
+    }
+    event.preventDefault();
+    if (shutdownPromise) {
+      return;
+    }
+    logger.info("app", "application quitting");
+    shutdownPromise = engine.stop().catch((error) => {
+      logger.error("app", `engine shutdown failed: ${error.message}`);
+    });
+    shutdownPromise.finally(() => {
+      quitApproved = true;
+      app.quit();
+    });
+  });
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
+      app.quit();
     }
   });
-});
-app.on("before-quit", async (event) => {
-  if (quitting) {
-    return;
-  }
-  event.preventDefault();
-  quitting = true;
-  logger.info("app", "application quitting");
-  await engine.stop();
-  app.quit();
-});
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
-});
+}

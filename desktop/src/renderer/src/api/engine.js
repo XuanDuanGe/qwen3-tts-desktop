@@ -28,6 +28,10 @@ export function cancelJob(jobId) {
   return engine.jobs.cancel(jobId);
 }
 
+export function listArtifacts() {
+  return engine.artifacts.list();
+}
+
 export function getArtifact(artifactId) {
   return engine.artifacts.get(artifactId);
 }

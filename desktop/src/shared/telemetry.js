@@ -17,6 +17,7 @@ export const TELEMETRY_ROUTES = new Set([
   'home',
   'voice_generate',
   'voice_clone',
+  'audio_files',
   'settings',
 ]);
 
@@ -27,5 +28,6 @@ export const TELEMETRY_COMPONENTS = new Set([
   'home_page',
   'voice_generate_page',
   'voice_clone_page',
+  'audio_files_page',
   'settings_page',
 ]);

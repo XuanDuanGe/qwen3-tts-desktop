@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { HiHome, HiMicrophone, HiOutlineCog6Tooth } from 'react-icons/hi2';
-import { RiVoiceprintLine } from 'react-icons/ri';
+import { RiFileMusicLine, RiVoiceprintLine } from 'react-icons/ri';
 import { NavLink } from 'react-router-dom';
 import { track } from '../api/telemetry';
 import { APP_ROUTE_ITEMS } from '../routes/config';
@@ -9,6 +9,7 @@ const ICONS = {
   '/': HiHome,
   '/voice-generate': HiMicrophone,
   '/voice-clone': RiVoiceprintLine,
+  '/audio-files': RiFileMusicLine,
   '/settings': HiOutlineCog6Tooth,
 };
 

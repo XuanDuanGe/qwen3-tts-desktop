@@ -1,13 +1,16 @@
 import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { EventEmitter } from 'node:events';
 import { getEnginePaths } from './paths.js';
 import { createRequest, parseMessage } from './protocol.js';
 
 const REQUEST_TIMEOUT = 30000;
+const STARTUP_REQUEST_TIMEOUT = 120000;
 const MODEL_INSTALL_TIMEOUT = 30 * 60 * 1000;
-const SHUTDOWN_TIMEOUT = 3000;
+const SHUTDOWN_TIMEOUT = 6000;
+const EXIT_TIMEOUT = 2000;
+const STARTUP_EXIT_TIMEOUT = 15000;
 
 export default class EngineManager extends EventEmitter {
   constructor(logger) {
@@ -19,13 +22,31 @@ export default class EngineManager extends EventEmitter {
     this.status = 'stopped';
     this.buffer = '';
     this.stopping = false;
+    this.ready = false;
+    this.stopRequested = false;
+    this.startPromise = null;
+    this.stopPromise = null;
   }
 
   async start() {
+    if (this.stopping || this.stopRequested) {
+      throw new Error('Engine is stopping');
+    }
     if (this.child) {
       return this.status;
     }
+    if (this.startPromise) {
+      return this.startPromise;
+    }
+    this.startPromise = this.startEngine();
+    try {
+      return await this.startPromise;
+    } finally {
+      this.startPromise = null;
+    }
+  }
 
+  async startEngine() {
     const paths = getEnginePaths();
     this.logger?.info('engine', `starting engine (${paths.packaged ? 'packaged' : 'development'})`);
     if (!paths.packaged) {
@@ -53,25 +74,36 @@ export default class EngineManager extends EventEmitter {
 
     this.status = 'starting';
     this.emit('status', this.status);
-    this.child = spawn(paths.command, args, {
+    if (this.stopRequested) {
+      throw new Error('Engine shutdown requested');
+    }
+    const child = spawn(paths.command, args, {
       cwd: paths.cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });
-    this.logger?.info('engine', `sidecar started pid=${this.child.pid}`);
-    this.child.stdout.setEncoding('utf8');
-    this.child.stderr.setEncoding('utf8');
-    this.child.stdout.on('data', (chunk) => this.handleStdout(chunk));
-    this.child.stderr.on('data', (chunk) => this.emit('stderr', chunk));
-    this.child.once('error', (error) => {
-      this.emit(
-        'stderr',
-        `Failed to start engine (${paths.command}, cwd: ${paths.cwd}): ${error.message}\n`,
-      );
-      this.handleExit(error);
+    this.child = child;
+    this.logger?.info('engine', `sidecar started pid=${child.pid}`);
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => this.handleStdout(chunk));
+    child.stderr.on('data', (chunk) => {
+      if (!this.stopRequested) {
+        this.emit('stderr', chunk);
+      }
     });
-    this.child.once('exit', (code, signal) => {
+    child.once('error', (error) => {
+      if (!this.stopRequested) {
+        this.emit(
+          'stderr',
+          `Failed to start engine (${paths.command}, cwd: ${paths.cwd}): ${error.message}\n`,
+        );
+      }
+      this.handleExit(child, error);
+    });
+    child.once('exit', (code, signal) => {
       this.handleExit(
+        child,
         new Error(
           `Engine exited with code ${code ?? 'unknown'}${signal ? ` (${signal})` : ''}`,
         ),
@@ -79,14 +111,25 @@ export default class EngineManager extends EventEmitter {
     });
 
     try {
-      await this.request('engine.hello');
-      await this.request('engine.health');
+      await this.request('engine.hello', {}, STARTUP_REQUEST_TIMEOUT);
+      await this.request('engine.health', {}, STARTUP_REQUEST_TIMEOUT);
+      if (this.stopRequested) {
+        throw new Error('Engine shutdown requested');
+      }
+      this.ready = true;
       this.status = 'ready';
       this.logger?.info('engine', 'engine ready');
       this.emit('status', this.status);
       return this.status;
     } catch (error) {
-      this.stopChild();
+      if (this.stopRequested) {
+        throw error;
+      }
+      await this.forceStop(child);
+      if (!(await this.waitForExit(child, STARTUP_EXIT_TIMEOUT))) {
+        await this.forceStop(child, true);
+        await this.waitForExit(child, EXIT_TIMEOUT);
+      }
       this.status = 'unavailable';
       this.logger?.error('engine', `startup failed: ${error.message}`);
       this.emit('status', this.status, error);
@@ -95,6 +138,9 @@ export default class EngineManager extends EventEmitter {
   }
 
   request(method, params = {}, timeout = REQUEST_TIMEOUT) {
+    if ((this.stopping || this.stopRequested) && method !== 'engine.shutdown') {
+      return Promise.reject(new Error('Engine is stopping'));
+    }
     if (!this.child?.stdin?.writable) {
       return Promise.reject(new Error('Engine is not running'));
     }
@@ -110,7 +156,14 @@ export default class EngineManager extends EventEmitter {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
-        this.logger?.error('engine', `request ${method} timed out after ${timeout}ms`);
+        const phase =
+          method === 'engine.hello' || method === 'engine.health'
+            ? 'startup handshake'
+            : 'request';
+        this.logger?.error(
+          'engine',
+          `${phase} ${method} timed out after ${timeout}ms`,
+        );
         reject(new Error(`Engine request timed out: ${method}`));
       }, timeout);
       this.pending.set(requestId, {
@@ -131,19 +184,48 @@ export default class EngineManager extends EventEmitter {
     });
   }
 
-  async stop() {
-    if (!this.child) {
+  stop() {
+    this.stopRequested = true;
+    if (!this.stopPromise) {
+      this.stopPromise = this.stopEngine();
+    }
+    return this.stopPromise;
+  }
+
+  async stopEngine() {
+    const child = this.child;
+    if (!child) {
+      this.ready = false;
       this.status = 'stopped';
       return;
     }
 
     this.stopping = true;
-    try {
-      await this.request('engine.shutdown', {}, SHUTDOWN_TIMEOUT);
-    } catch {
-      this.stopChild();
+    const wasReady = this.ready;
+    if (!wasReady) {
+      this.closeStdin(child);
+    } else {
+      try {
+        await this.request('engine.shutdown', {}, SHUTDOWN_TIMEOUT);
+      } catch (error) {
+        if (this.child === child) {
+          this.logger?.warn('engine', `graceful shutdown failed: ${error.message}`);
+        }
+      }
     }
-    this.stopChild();
+
+    const exitTimeout = wasReady ? EXIT_TIMEOUT : STARTUP_EXIT_TIMEOUT;
+    if (!(await this.waitForExit(child, exitTimeout))) {
+      this.logger?.warn('engine', `sidecar did not exit gracefully pid=${child.pid}`);
+      await this.forceStop(child);
+      if (!(await this.waitForExit(child, EXIT_TIMEOUT))) {
+        await this.forceStop(child, true);
+        if (!(await this.waitForExit(child, EXIT_TIMEOUT))) {
+          this.logger?.error('engine', `sidecar did not exit after forced stop pid=${child.pid}`);
+        }
+      }
+    }
+
     this.status = 'stopped';
     this.emit('status', this.status);
   }
@@ -193,11 +275,12 @@ export default class EngineManager extends EventEmitter {
     }
   }
 
-  handleExit(error) {
-    if (!this.child) {
+  handleExit(child, error) {
+    if (this.child !== child) {
       return;
     }
     this.child = null;
+    this.ready = false;
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
       pending.reject(error);
@@ -210,10 +293,55 @@ export default class EngineManager extends EventEmitter {
     }
   }
 
-  stopChild() {
-    if (this.child && !this.child.killed) {
-      this.child.kill();
+  closeStdin(child) {
+    if (
+      child.stdin &&
+      !child.stdin.destroyed &&
+      !child.stdin.writableEnded
+    ) {
+      child.stdin.end();
     }
-    this.child = null;
+  }
+
+  waitForExit(child, timeout) {
+    if (this.child !== child) {
+      return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        child.removeListener('exit', onExit);
+        resolve(this.child !== child);
+      }, timeout);
+      const onExit = () => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+      child.once('exit', onExit);
+    });
+  }
+
+  async forceStop(child, force = false) {
+    if (this.child !== child || !child.pid) {
+      return;
+    }
+    if (process.platform === 'win32') {
+      await new Promise((resolve) => {
+        execFile(
+          'taskkill',
+          ['/PID', String(child.pid), '/T', '/F'],
+          { windowsHide: true },
+          (error) => {
+            if (error) {
+              this.logger?.warn('engine', `taskkill failed: ${error.message}`);
+            }
+            resolve();
+          },
+        );
+      });
+      return;
+    }
+    if (!child.killed) {
+      child.kill(force ? 'SIGKILL' : 'SIGTERM');
+    }
   }
 }

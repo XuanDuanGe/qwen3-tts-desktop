@@ -16,6 +16,11 @@ export const APP_ROUTE_ITEMS = [
     telemetry: 'voice_clone',
   },
   {
+    path: '/audio-files',
+    label: '音频文件',
+    telemetry: 'audio_files',
+  },
+  {
     path: '/settings',
     label: '设置',
     telemetry: 'settings',

@@ -36,8 +36,14 @@ class RuntimePaths:
             raise ValueError("invalid reference path")
         return path
 
-    def artifact_path(self, artifact_id):
-        path = (self.outputs / f"{artifact_id}.wav").resolve()
+    def artifact_json_path(self, artifact_id):
+        path = (self.outputs / f"{artifact_id}.json").resolve()
+        if self.outputs not in path.parents:
+            raise ValueError("invalid artifact path")
+        return path
+
+    def artifact_audio_path(self, file_name):
+        path = (self.outputs / file_name).resolve()
         if self.outputs not in path.parents:
             raise ValueError("invalid artifact path")
         return path

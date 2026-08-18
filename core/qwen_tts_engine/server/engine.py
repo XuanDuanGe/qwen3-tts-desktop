@@ -94,10 +94,13 @@ class EngineServer:
         raise EngineError("invalid_request", f"unknown method: {method}")
 
     def close(self):
-        if self.running:
-            self.running = False
-            self.queue.close()
+        if not self.running:
+            return
+        self.running = False
+        if self.queue.close():
             self.runtime.unload()
+        else:
+            self._log_message("job worker did not stop before shutdown timeout")
 
     def _submit(self, params):
         kind = require(params.get("kind"), "kind")
@@ -143,6 +146,8 @@ class EngineServer:
             raise EngineError("model_install_failed", str(exc)) from exc
 
     def _run_job(self, params, item, update):
+        if item["cancelled"]:
+            raise RuntimeError("cancelled")
         model_id = params["modelId"]
         started = time.monotonic()
         self._log_message(f"job started kind={params['kind']} text_length={len(params['text'])}")
@@ -221,6 +226,8 @@ class EngineServer:
                     axis=-1,
                 )
             ]
+        if item["cancelled"]:
+            raise RuntimeError("cancelled")
         update("running", 0.95, "saving", "正在保存音频")
         if sample_rate is None:
             raise RuntimeError("model returned no sample rate")

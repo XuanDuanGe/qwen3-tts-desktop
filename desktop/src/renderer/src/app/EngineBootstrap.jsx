@@ -4,6 +4,7 @@ import { track } from '../api/telemetry';
 import useArtifactStore from '../store/artifactStore';
 import useEngineStore from '../store/engineStore';
 import useJobStore from '../store/jobStore';
+import useMessageStore from '../store/messageStore';
 
 export default function EngineBootstrap() {
   useEffect(() => {
@@ -20,9 +21,12 @@ export default function EngineBootstrap() {
       }
     });
     const unsubscribeJob = onJobUpdated(useJobStore.getState().update);
-    const unsubscribeArtifact = onArtifactCreated(
-      useArtifactStore.getState().add,
-    );
+    const unsubscribeArtifact = onArtifactCreated((artifact) => {
+      useArtifactStore.getState().add(artifact);
+      useMessageStore
+        .getState()
+        .push({ level: 'success', content: '语音生成任务已完成。' });
+    });
 
     return () => {
       unsubscribeStatus();
