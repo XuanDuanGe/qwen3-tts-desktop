@@ -1,26 +1,5 @@
-import { BrowserWindow, ipcMain } from 'electron';
-
-function getManager(event, manager) {
-  const window = BrowserWindow.fromWebContents(event.sender);
-  if (!window || window.isDestroyed()) {
-    throw new Error('Invalid renderer window');
-  }
-  return manager;
-}
-
-function requireString(value, name) {
-  if (typeof value !== 'string' || !value.trim()) {
-    throw new Error(`${name} must be a non-empty string`);
-  }
-  return value;
-}
-
-function requireObject(value, name) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`${name} must be an object`);
-  }
-  return value;
-}
+import { ipcMain } from 'electron';
+import { getManager, requireObject, requireString } from './common.js';
 
 function requireProxy(value) {
   if (value == null || value === '') return undefined;
@@ -86,20 +65,6 @@ export function registerEngineHandlers(manager) {
     getManager(event, manager);
     return manager.request('jobs.cancel', {
       jobId: requireString(jobId, 'jobId'),
-    });
-  });
-
-  ipcMain.handle('artifacts:get', (event, artifactId) => {
-    getManager(event, manager);
-    return manager.request('artifacts.get', {
-      artifactId: requireString(artifactId, 'artifactId'),
-    });
-  });
-
-  ipcMain.handle('artifacts:delete', (event, artifactId) => {
-    getManager(event, manager);
-    return manager.request('artifacts.delete', {
-      artifactId: requireString(artifactId, 'artifactId'),
     });
   });
 }

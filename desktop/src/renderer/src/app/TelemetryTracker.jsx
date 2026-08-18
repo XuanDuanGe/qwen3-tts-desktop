@@ -1,13 +1,7 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { track } from '../api/telemetry';
-
-const ROUTES = {
-  '/': 'home',
-  '/voice-generate': 'voice_generate',
-  '/voice-clone': 'voice_clone',
-  '/settings': 'settings',
-};
+import { APP_ROUTE_BY_PATH } from '../routes/config';
 
 export default function TelemetryTracker() {
   const location = useLocation();
@@ -17,7 +11,7 @@ export default function TelemetryTracker() {
   }, []);
 
   useEffect(() => {
-    const route = ROUTES[location.pathname];
+    const route = APP_ROUTE_BY_PATH[location.pathname];
     if (route) track('page_view', { route });
   }, [location.pathname]);
 

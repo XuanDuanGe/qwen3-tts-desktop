@@ -1,31 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FiDownload } from 'react-icons/fi';
-import { downloadArtifact, readArtifact } from '../api/engine';
-import useEngineStore from '../store/engineStore';
-import useJobStore from '../store/jobStore';
-import { track } from '../api/telemetry';
-
-const CUSTOM_VOICE_MODELS = new Set([
-  'qwen3-tts-12hz-1.7b-customvoice',
-  'qwen3-tts-12hz-0.6b-customvoice',
-]);
-
-const JOB_STATUS_TEXT = {
-  queued: '等待中',
-  preparing: '准备中',
-  running: '生成中',
-  succeeded: '已完成',
-  failed: '生成失败',
-  cancelled: '已取消',
-};
-
-function toBytes(value) {
-  if (value instanceof Uint8Array) return value;
-  if (value?.type === 'Buffer' && Array.isArray(value.data)) {
-    return new Uint8Array(value.data);
-  }
-  return new Uint8Array(value);
-}
+import { downloadArtifact, readArtifact } from '../../api/engine';
+import { track } from '../../api/telemetry';
+import useEngineStore from '../../store/engineStore';
+import useJobStore from '../../store/jobStore';
+import { CUSTOM_VOICE_MODELS, JOB_STATUS_TEXT } from './constants';
+import { toBytes } from './utils';
 
 export default function VoiceGeneratePage() {
   const status = useEngineStore((state) => state.status);
@@ -141,7 +121,12 @@ export default function VoiceGeneratePage() {
     track('generation_submitted', {
       kind: 'custom_voice',
       split_by_line: splitByLine,
-      text_length_bucket: text.trim().length > 500 ? '501_plus' : text.trim().length > 100 ? '101_500' : '1_100',
+      text_length_bucket:
+        text.trim().length > 500
+          ? '501_plus'
+          : text.trim().length > 100
+            ? '101_500'
+            : '1_100',
     });
     setInstallingModel(!selectedModel?.installed);
     try {

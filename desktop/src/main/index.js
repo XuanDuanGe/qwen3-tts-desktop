@@ -1,83 +1,40 @@
-import { app, BrowserWindow } from 'electron';
+import { app } from 'electron';
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import EngineManager from './engine/manager.js';
 import { getEnginePaths } from './engine/paths.js';
+import { registerEngineEvents } from './engine/registerEngineEvents.js';
+import { registerHandlers } from './ipc/registerHandlers.js';
 import { createLogger } from './logger.js';
-import { registerGreetHandler } from './ipc/greet.js';
-import { registerEngineHandlers } from './ipc/engine.js';
-import { registerArtifactHandlers } from './ipc/artifacts.js';
-import { registerTelemetryHandler } from './ipc/telemetry.js';
-import { registerWindowControlHandlers } from './ipc/windowControls.js';
+import { createWindow } from './window/createWindow.js';
 
-const logger = createLogger(getEnginePaths().appData);
+const enginePaths = getEnginePaths();
+const sessionDataPath = join(enginePaths.appData, 'session-data');
+mkdirSync(enginePaths.appData, { recursive: true });
+mkdirSync(enginePaths.cache, { recursive: true });
+mkdirSync(sessionDataPath, { recursive: true });
+app.setPath('userData', enginePaths.appData);
+app.setPath('cache', enginePaths.cache);
+app.setPath('sessionData', sessionDataPath);
+
+const logger = createLogger(enginePaths.appData);
 const engine = new EngineManager(logger);
 let mainWindow;
 let quitting = false;
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
-    title: 'Qwen3 TTS Desktop',
-    width: 1024,
-    height: 768,
-    minWidth: 800,
-    minHeight: 600,
-    frame: false,
-    webPreferences: {
-      preload: join(import.meta.dirname, 'index.mjs'),
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      webSecurity: true,
-    },
-  });
-
-  if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(join(import.meta.dirname, '../../dist/index.html'));
-  }
-}
-
 app.whenReady().then(async () => {
   logger.info('app', 'application ready');
-  registerGreetHandler();
-  registerEngineHandlers(engine);
-  registerArtifactHandlers();
-  registerWindowControlHandlers();
-  registerTelemetryHandler(logger);
-  engine.on('status', (status) =>
-    mainWindow?.webContents.send('engine:status-changed', status),
-  );
-  engine.on('event', (message) => {
-    logger.debug('engine', `event ${message.event}`);
-    const channel = {
-      'job.updated': 'engine:job-updated',
-      'artifact.created': 'engine:artifact-created',
-    }[message.event];
-    if (channel) {
-      if (message.event === 'artifact.created') {
-        logger.info('artifact', 'artifact created received; forwarding to renderer');
-      }
-      mainWindow?.webContents.send(channel, message.payload);
-      if (message.event === 'artifact.created') {
-        logger.info('artifact', 'artifact forwarded to renderer for preview');
-      }
-    }
-  });
-  engine.on('stderr', (message) => {
-    for (const line of message.split(/\r?\n/)) {
-      if (line.trim()) logger.warn('python', line.trim());
-    }
-  });
-  createWindow();
+  registerHandlers(engine, logger);
+  registerEngineEvents(engine, logger, () => mainWindow);
+  mainWindow = createWindow();
   try {
     await engine.start();
   } catch (error) {
     logger.error('app', `engine startup failed: ${error.message}`);
   }
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      mainWindow = createWindow();
     }
   });
 });

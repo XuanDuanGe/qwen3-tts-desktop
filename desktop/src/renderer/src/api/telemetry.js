@@ -1,27 +1,9 @@
-const EVENT_NAMES = new Set([
-  'app_started',
-  'engine_bootstrap_started',
-  'engine_ready',
-  'engine_unavailable',
-  'page_view',
-  'component_used',
-  'model_capabilities_requested',
-  'generation_submitted',
-  'generation_succeeded',
-  'generation_failed',
-  'artifact_downloaded',
-]);
+import {
+  TELEMETRY_COMPONENTS,
+  TELEMETRY_EVENTS,
+  TELEMETRY_ROUTES,
+} from '../../../shared/telemetry';
 
-const ROUTES = new Set(['home', 'voice_generate', 'voice_clone', 'settings']);
-const COMPONENTS = new Set([
-  'engine_bootstrap',
-  'sidebar',
-  'title_bar',
-  'home_page',
-  'voice_generate_page',
-  'voice_clone_page',
-  'settings_page',
-]);
 const seen = new Set();
 
 function safeProperties(properties = {}) {
@@ -37,9 +19,9 @@ function safeProperties(properties = {}) {
 }
 
 export function track(name, properties = {}, { once = false } = {}) {
-  if (!EVENT_NAMES.has(name)) return;
-  if (name === 'page_view' && !ROUTES.has(properties.route)) return;
-  if (name === 'component_used' && !COMPONENTS.has(properties.component)) return;
+  if (!TELEMETRY_EVENTS.has(name)) return;
+  if (name === 'page_view' && !TELEMETRY_ROUTES.has(properties.route)) return;
+  if (name === 'component_used' && !TELEMETRY_COMPONENTS.has(properties.component)) return;
   const key = `${name}:${JSON.stringify(properties)}`;
   if (once && seen.has(key)) return;
   seen.add(key);

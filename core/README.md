@@ -21,6 +21,14 @@ python -m qwen_tts_engine \
   --cache-dir .local/cache
 ```
 
+## 包结构
+
+- `qwen_tts_engine/runtime/`：Qwen 运行时预热、加载、卸载和推理。
+- `qwen_tts_engine/models/`：模型注册表、能力查询、安装与完整性检查。
+- `qwen_tts_engine/storage/`：路径管理、artifact 存储、参考音频存储。
+- `qwen_tts_engine/jobs/`：单 worker 任务队列与状态推进。
+- `qwen_tts_engine/server/`：NDJSON 协议与 sidecar 请求分发。
+
 ## 协议示例
 
 请求：

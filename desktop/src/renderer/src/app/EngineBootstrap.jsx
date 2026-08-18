@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 import { onArtifactCreated, onEngineStatus, onJobUpdated } from '../api/engine';
+import { track } from '../api/telemetry';
 import useArtifactStore from '../store/artifactStore';
 import useEngineStore from '../store/engineStore';
 import useJobStore from '../store/jobStore';
-import { track } from '../api/telemetry';
 
 export default function EngineBootstrap() {
   useEffect(() => {

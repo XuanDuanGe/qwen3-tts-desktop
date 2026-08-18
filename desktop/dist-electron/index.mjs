@@ -10,17 +10,8 @@ function subscribe(channel, listener) {
   electron.ipcRenderer.on(channel, handler);
   return () => electron.ipcRenderer.removeListener(channel, handler);
 }
-electron.contextBridge.exposeInMainWorld("api", {
-  greet: (name) => electron.ipcRenderer.invoke("greet", name),
-  minimizeWindow: () => electron.ipcRenderer.invoke("window:minimize"),
-  toggleMaximizeWindow: () => electron.ipcRenderer.invoke("window:toggle-maximize"),
-  closeWindow: () => electron.ipcRenderer.invoke("window:close"),
-  isWindowMaximized: () => electron.ipcRenderer.invoke("window:is-maximized"),
-  platform: process.platform,
-  telemetry: {
-    track: (name, properties) => electron.ipcRenderer.invoke("telemetry:track", name, properties)
-  },
-  engine: {
+function createEngineApi() {
+  return {
     getStatus: () => electron.ipcRenderer.invoke("engine:status"),
     models: {
       list: () => electron.ipcRenderer.invoke("models:list"),
@@ -41,5 +32,25 @@ electron.contextBridge.exposeInMainWorld("api", {
     onStatus: (listener) => subscribe(subscriptions.engineStatus, listener),
     onJobUpdated: (listener) => subscribe(subscriptions.jobUpdated, listener),
     onArtifactCreated: (listener) => subscribe(subscriptions.artifactCreated, listener)
-  }
+  };
+}
+function createTelemetryApi() {
+  return {
+    track: (name, properties) => electron.ipcRenderer.invoke("telemetry:track", name, properties)
+  };
+}
+function createWindowApi() {
+  return {
+    minimizeWindow: () => electron.ipcRenderer.invoke("window:minimize"),
+    toggleMaximizeWindow: () => electron.ipcRenderer.invoke("window:toggle-maximize"),
+    closeWindow: () => electron.ipcRenderer.invoke("window:close"),
+    isWindowMaximized: () => electron.ipcRenderer.invoke("window:is-maximized")
+  };
+}
+electron.contextBridge.exposeInMainWorld("api", {
+  greet: (name) => electron.ipcRenderer.invoke("greet", name),
+  platform: process.platform,
+  telemetry: createTelemetryApi(),
+  engine: createEngineApi(),
+  ...createWindowApi()
 });

@@ -13,7 +13,14 @@ class RuntimePaths:
         self.logs = self.app_data / "logs"
 
     def prepare(self):
-        for path in (self.models, self.outputs, self.temp, self.references, self.logs, self.cache):
+        for path in (
+            self.models,
+            self.outputs,
+            self.temp,
+            self.references,
+            self.logs,
+            self.cache,
+        ):
             path.mkdir(parents=True, exist_ok=True)
         os.environ["HF_HOME"] = str(self.cache / "huggingface")
         os.environ["MODELSCOPE_CACHE"] = str(self.cache / "modelscope")

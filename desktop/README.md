@@ -16,6 +16,7 @@ pnpm build
 
 ## 目录结构
 
-- `src/main`：Electron 主进程与 IPC 处理。
-- `src/preload`：安全暴露给渲染进程的预加载接口。
-- `src/renderer`：React 渲染进程页面、路由、状态和样式。
+- `src/main`：Electron 主进程组合入口、窗口、engine 生命周期、IPC 处理。
+- `src/preload`：按 API 分组的预加载桥接层。
+- `src/shared`：main / renderer 共用常量。
+- `src/renderer`：React 渲染进程页面、layout、feature、状态和样式。

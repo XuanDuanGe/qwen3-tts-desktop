@@ -1,29 +1,9 @@
 import { ipcMain } from 'electron';
-
-const EVENTS = new Set([
-  'app_started',
-  'engine_bootstrap_started',
-  'engine_ready',
-  'engine_unavailable',
-  'page_view',
-  'component_used',
-  'model_capabilities_requested',
-  'generation_submitted',
-  'generation_succeeded',
-  'generation_failed',
-  'artifact_downloaded',
-  'artifact_preview_ready',
-]);
-const ROUTES = new Set(['home', 'voice_generate', 'voice_clone', 'settings']);
-const COMPONENTS = new Set([
-  'engine_bootstrap',
-  'sidebar',
-  'title_bar',
-  'home_page',
-  'voice_generate_page',
-  'voice_clone_page',
-  'settings_page',
-]);
+import {
+  TELEMETRY_COMPONENTS,
+  TELEMETRY_EVENTS,
+  TELEMETRY_ROUTES,
+} from '../../shared/telemetry.js';
 
 function validateProperties(event, properties = {}) {
   if (!properties || typeof properties !== 'object' || Array.isArray(properties)) {
@@ -41,10 +21,10 @@ function validateProperties(event, properties = {}) {
     }
     result[key] = value;
   }
-  if (event === 'page_view' && !ROUTES.has(result.route)) {
+  if (event === 'page_view' && !TELEMETRY_ROUTES.has(result.route)) {
     throw new Error('invalid telemetry route');
   }
-  if (event === 'component_used' && !COMPONENTS.has(result.component)) {
+  if (event === 'component_used' && !TELEMETRY_COMPONENTS.has(result.component)) {
     throw new Error('invalid telemetry component');
   }
   return result;
@@ -52,7 +32,7 @@ function validateProperties(event, properties = {}) {
 
 export function registerTelemetryHandler(logger) {
   ipcMain.handle('telemetry:track', (event, name, properties) => {
-    if (typeof name !== 'string' || !EVENTS.has(name)) {
+    if (typeof name !== 'string' || !TELEMETRY_EVENTS.has(name)) {
       throw new Error('invalid telemetry event');
     }
     const safeProperties = validateProperties(name, properties);

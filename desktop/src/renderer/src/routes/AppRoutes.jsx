@@ -1,11 +1,11 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
-import TitleBar from '../components/TitleBar';
-import Sidebar from '../components/Sidebar';
+import TelemetryTracker from '../app/TelemetryTracker';
 import HomePage from '../pages/HomePage';
 import SettingsPage from '../pages/SettingsPage';
 import VoiceClonePage from '../pages/VoiceClonePage';
-import VoiceGeneratePage from '../pages/VoiceGeneratePage';
-import TelemetryTracker from '../components/TelemetryTracker';
+import VoiceGeneratePage from '../features/voice-generate/VoiceGeneratePage';
+import Sidebar from '../layout/Sidebar';
+import TitleBar from '../layout/TitleBar';
 
 export default function AppRoutes() {
   return (

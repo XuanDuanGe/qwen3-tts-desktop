@@ -1,7 +1,7 @@
-import { app, ipcMain, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
+import { constants, mkdirSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { access, readFile, copyFile } from "node:fs/promises";
-import { constants, mkdirSync, appendFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 const workspaceRoot = join(app.getAppPath(), "..");
@@ -255,57 +255,47 @@ class EngineManager extends EventEmitter {
     this.child = null;
   }
 }
-const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
-function timestamp(date = /* @__PURE__ */ new Date()) {
-  const pad = (value, size = 2) => String(value).padStart(size, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
-}
-function lineTimestamp(date = /* @__PURE__ */ new Date()) {
-  return `${timestamp(date)}.${String(date.getMilliseconds()).padStart(3, "0")}`;
-}
-function createLogger(appData, level = process.env.QWEN_TTS_LOG_LEVEL || "info") {
-  const threshold = LEVELS[level] || LEVELS.info;
-  const logsDir = join(appData, "logs");
-  const filePath = join(logsDir, `${timestamp()}.log`);
-  let ready = false;
-  try {
-    mkdirSync(logsDir, { recursive: true });
-    ready = true;
-  } catch (error) {
-    console.error(`[logger] unable to create log directory: ${error.message}`);
-  }
-  function write(name, module, message) {
-    if (LEVELS[name] < threshold) return;
-    const line = `${lineTimestamp()} [${name.toUpperCase()}] [${module}] ${message}`;
-    if (name === "error") console.error(line);
-    else if (name === "warn") console.warn(line);
-    else console.log(line);
-    if (ready) {
-      try {
-        appendFileSync(filePath, `${line}
-`, "utf8");
-      } catch (error) {
-        ready = false;
-        console.error(`[logger] unable to write log file: ${error.message}`);
-      }
+function registerEngineEvents(engine2, logger2, getWindow2) {
+  engine2.on("status", (status) => {
+    var _a;
+    (_a = getWindow2()) == null ? void 0 : _a.webContents.send("engine:status-changed", status);
+  });
+  engine2.on("event", (message) => {
+    var _a;
+    logger2.debug("engine", `event ${message.event}`);
+    const channel = {
+      "job.updated": "engine:job-updated",
+      "artifact.created": "engine:artifact-created"
+    }[message.event];
+    if (!channel) {
+      return;
     }
-  }
-  return {
-    filePath,
-    debug: (module, message) => write("debug", module, message),
-    info: (module, message) => write("info", module, message),
-    warn: (module, message) => write("warn", module, message),
-    error: (module, message) => write("error", module, message)
-  };
+    if (message.event === "artifact.created") {
+      logger2.info("artifact", "artifact created received; forwarding to renderer");
+    }
+    (_a = getWindow2()) == null ? void 0 : _a.webContents.send(channel, message.payload);
+    if (message.event === "artifact.created") {
+      logger2.info("artifact", "artifact forwarded to renderer for preview");
+    }
+  });
+  engine2.on("stderr", (message) => {
+    for (const line of message.split(/\r?\n/)) {
+      if (line.trim()) logger2.warn("python", line.trim());
+    }
+  });
 }
-function registerGreetHandler() {
-  ipcMain.handle("greet", (_, name) => `你好，${name}！`);
+function getWindow(event) {
+  return BrowserWindow.fromWebContents(event.sender);
 }
-function getManager(event, manager) {
-  const window = BrowserWindow.fromWebContents(event.sender);
+function validateSender(event) {
+  const window = getWindow(event);
   if (!window || window.isDestroyed()) {
     throw new Error("Invalid renderer window");
   }
+  return window;
+}
+function getManager(event, manager) {
+  validateSender(event);
   return manager;
 }
 function requireString(value, name) {
@@ -319,6 +309,54 @@ function requireObject(value, name) {
     throw new Error(`${name} must be an object`);
   }
   return value;
+}
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function requireArtifactId(artifactId) {
+  const value = requireString(artifactId, "artifactId");
+  if (!UUID_PATTERN.test(value)) {
+    throw new Error("artifactId must be a valid UUID");
+  }
+  return value.toLowerCase();
+}
+function getArtifactPath(artifactId) {
+  return join(getEnginePaths().appData, "outputs", `${artifactId}.wav`);
+}
+async function requireArtifactFile(artifactId) {
+  const path = getArtifactPath(artifactId);
+  try {
+    await access(path, constants.R_OK);
+  } catch {
+    throw new Error("Artifact not found");
+  }
+  return path;
+}
+function registerArtifactHandlers(manager) {
+  ipcMain.handle("artifacts:get", (event, artifactId) => {
+    const engine2 = getManager(event, manager);
+    return engine2.request("artifacts.get", {
+      artifactId: requireArtifactId(artifactId)
+    });
+  });
+  ipcMain.handle("artifacts:delete", (event, artifactId) => {
+    const engine2 = getManager(event, manager);
+    return engine2.request("artifacts.delete", {
+      artifactId: requireArtifactId(artifactId)
+    });
+  });
+  ipcMain.handle("artifacts:read", async (event, artifactId) => {
+    validateSender(event);
+    const path = await requireArtifactFile(requireArtifactId(artifactId));
+    return readFile(path);
+  });
+  ipcMain.handle("artifacts:download", async (event, artifactId) => {
+    validateSender(event);
+    const normalizedArtifactId = requireArtifactId(artifactId);
+    const source = await requireArtifactFile(normalizedArtifactId);
+    const fileName = `qwen3-tts-${normalizedArtifactId}.wav`;
+    const target = join(app.getPath("downloads"), fileName);
+    await copyFile(source, target);
+    return { fileName };
+  });
 }
 function requireProxy(value) {
   if (value == null || value === "") return void 0;
@@ -375,61 +413,11 @@ function registerEngineHandlers(manager) {
       jobId: requireString(jobId, "jobId")
     });
   });
-  ipcMain.handle("artifacts:get", (event, artifactId) => {
-    getManager(event, manager);
-    return manager.request("artifacts.get", {
-      artifactId: requireString(artifactId, "artifactId")
-    });
-  });
-  ipcMain.handle("artifacts:delete", (event, artifactId) => {
-    getManager(event, manager);
-    return manager.request("artifacts.delete", {
-      artifactId: requireString(artifactId, "artifactId")
-    });
-  });
 }
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-function validateSender(event) {
-  const window = BrowserWindow.fromWebContents(event.sender);
-  if (!window || window.isDestroyed()) {
-    throw new Error("Invalid renderer window");
-  }
+function registerGreetHandler() {
+  ipcMain.handle("greet", (_, name) => `你好，${name}！`);
 }
-function requireArtifactId(artifactId) {
-  if (typeof artifactId !== "string" || !UUID_PATTERN.test(artifactId)) {
-    throw new Error("artifactId must be a valid UUID");
-  }
-  return artifactId.toLowerCase();
-}
-function getArtifactPath(artifactId) {
-  return join(getEnginePaths().appData, "outputs", `${artifactId}.wav`);
-}
-async function requireArtifactFile(artifactId) {
-  const path = getArtifactPath(artifactId);
-  try {
-    await access(path, constants.R_OK);
-  } catch {
-    throw new Error("Artifact not found");
-  }
-  return path;
-}
-function registerArtifactHandlers() {
-  ipcMain.handle("artifacts:read", async (event, artifactId) => {
-    validateSender(event);
-    const path = await requireArtifactFile(requireArtifactId(artifactId));
-    return readFile(path);
-  });
-  ipcMain.handle("artifacts:download", async (event, artifactId) => {
-    validateSender(event);
-    const normalizedArtifactId = requireArtifactId(artifactId);
-    const source = await requireArtifactFile(normalizedArtifactId);
-    const fileName = `qwen3-tts-${normalizedArtifactId}.wav`;
-    const target = join(app.getPath("downloads"), fileName);
-    await copyFile(source, target);
-    return { fileName };
-  });
-}
-const EVENTS = /* @__PURE__ */ new Set([
+const TELEMETRY_EVENTS = /* @__PURE__ */ new Set([
   "app_started",
   "engine_bootstrap_started",
   "engine_ready",
@@ -443,8 +431,13 @@ const EVENTS = /* @__PURE__ */ new Set([
   "artifact_downloaded",
   "artifact_preview_ready"
 ]);
-const ROUTES = /* @__PURE__ */ new Set(["home", "voice_generate", "voice_clone", "settings"]);
-const COMPONENTS = /* @__PURE__ */ new Set([
+const TELEMETRY_ROUTES = /* @__PURE__ */ new Set([
+  "home",
+  "voice_generate",
+  "voice_clone",
+  "settings"
+]);
+const TELEMETRY_COMPONENTS = /* @__PURE__ */ new Set([
   "engine_bootstrap",
   "sidebar",
   "title_bar",
@@ -464,26 +457,23 @@ function validateProperties(event, properties = {}) {
     }
     result[key] = value;
   }
-  if (event === "page_view" && !ROUTES.has(result.route)) {
+  if (event === "page_view" && !TELEMETRY_ROUTES.has(result.route)) {
     throw new Error("invalid telemetry route");
   }
-  if (event === "component_used" && !COMPONENTS.has(result.component)) {
+  if (event === "component_used" && !TELEMETRY_COMPONENTS.has(result.component)) {
     throw new Error("invalid telemetry component");
   }
   return result;
 }
 function registerTelemetryHandler(logger2) {
   ipcMain.handle("telemetry:track", (event, name, properties) => {
-    if (typeof name !== "string" || !EVENTS.has(name)) {
+    if (typeof name !== "string" || !TELEMETRY_EVENTS.has(name)) {
       throw new Error("invalid telemetry event");
     }
     const safeProperties = validateProperties(name, properties);
     logger2.info("telemetry", `${name} ${JSON.stringify(safeProperties)}`);
     return { tracked: true };
   });
-}
-function getWindow(event) {
-  return BrowserWindow.fromWebContents(event.sender);
 }
 function registerWindowControlHandlers() {
   ipcMain.handle("window:minimize", (event) => {
@@ -511,12 +501,58 @@ function registerWindowControlHandlers() {
     return ((_a = getWindow(event)) == null ? void 0 : _a.isMaximized()) ?? false;
   });
 }
-const logger = createLogger(getEnginePaths().appData);
-const engine = new EngineManager(logger);
-let mainWindow;
-let quitting = false;
+function registerHandlers(engine2, logger2) {
+  registerGreetHandler();
+  registerEngineHandlers(engine2);
+  registerArtifactHandlers(engine2);
+  registerWindowControlHandlers();
+  registerTelemetryHandler(logger2);
+}
+const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
+function timestamp(date = /* @__PURE__ */ new Date()) {
+  const pad = (value, size = 2) => String(value).padStart(size, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+}
+function lineTimestamp(date = /* @__PURE__ */ new Date()) {
+  return `${timestamp(date)}.${String(date.getMilliseconds()).padStart(3, "0")}`;
+}
+function createLogger(appData, level = process.env.QWEN_TTS_LOG_LEVEL || "info") {
+  const threshold = LEVELS[level] || LEVELS.info;
+  const logsDir = join(appData, "logs");
+  const filePath = join(logsDir, `${timestamp()}.log`);
+  let ready = false;
+  try {
+    mkdirSync(logsDir, { recursive: true });
+    ready = true;
+  } catch (error) {
+    console.error(`[logger] unable to create log directory: ${error.message}`);
+  }
+  function write(name, module, message) {
+    if (LEVELS[name] < threshold) return;
+    const line = `${lineTimestamp()} [${name.toUpperCase()}] [${module}] ${message}`;
+    if (name === "error") console.error(line);
+    else if (name === "warn") console.warn(line);
+    else console.log(line);
+    if (ready) {
+      try {
+        appendFileSync(filePath, `${line}
+`, "utf8");
+      } catch (error) {
+        ready = false;
+        console.error(`[logger] unable to write log file: ${error.message}`);
+      }
+    }
+  }
+  return {
+    filePath,
+    debug: (module, message) => write("debug", module, message),
+    info: (module, message) => write("info", module, message),
+    warn: (module, message) => write("warn", module, message),
+    error: (module, message) => write("error", module, message)
+  };
+}
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  const window = new BrowserWindow({
     title: "Qwen3 TTS Desktop",
     width: 1024,
     height: 768,
@@ -532,52 +568,37 @@ function createWindow() {
     }
   });
   if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+    window.loadURL(process.env.VITE_DEV_SERVER_URL);
   } else {
-    mainWindow.loadFile(join(import.meta.dirname, "../../dist/index.html"));
+    window.loadFile(join(import.meta.dirname, "../../dist/index.html"));
   }
+  return window;
 }
+const enginePaths = getEnginePaths();
+const sessionDataPath = join(enginePaths.appData, "session-data");
+mkdirSync(enginePaths.appData, { recursive: true });
+mkdirSync(enginePaths.cache, { recursive: true });
+mkdirSync(sessionDataPath, { recursive: true });
+app.setPath("userData", enginePaths.appData);
+app.setPath("cache", enginePaths.cache);
+app.setPath("sessionData", sessionDataPath);
+const logger = createLogger(enginePaths.appData);
+const engine = new EngineManager(logger);
+let mainWindow;
+let quitting = false;
 app.whenReady().then(async () => {
   logger.info("app", "application ready");
-  registerGreetHandler();
-  registerEngineHandlers(engine);
-  registerArtifactHandlers();
-  registerWindowControlHandlers();
-  registerTelemetryHandler(logger);
-  engine.on(
-    "status",
-    (status) => mainWindow == null ? void 0 : mainWindow.webContents.send("engine:status-changed", status)
-  );
-  engine.on("event", (message) => {
-    logger.debug("engine", `event ${message.event}`);
-    const channel = {
-      "job.updated": "engine:job-updated",
-      "artifact.created": "engine:artifact-created"
-    }[message.event];
-    if (channel) {
-      if (message.event === "artifact.created") {
-        logger.info("artifact", "artifact created received; forwarding to renderer");
-      }
-      mainWindow == null ? void 0 : mainWindow.webContents.send(channel, message.payload);
-      if (message.event === "artifact.created") {
-        logger.info("artifact", "artifact forwarded to renderer for preview");
-      }
-    }
-  });
-  engine.on("stderr", (message) => {
-    for (const line of message.split(/\r?\n/)) {
-      if (line.trim()) logger.warn("python", line.trim());
-    }
-  });
-  createWindow();
+  registerHandlers(engine, logger);
+  registerEngineEvents(engine, logger, () => mainWindow);
+  mainWindow = createWindow();
   try {
     await engine.start();
   } catch (error) {
     logger.error("app", `engine startup failed: ${error.message}`);
   }
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      mainWindow = createWindow();
     }
   });
 });

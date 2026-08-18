@@ -1,4 +1,3 @@
-from pathlib import Path
 import threading
 
 import pytest
@@ -10,9 +9,9 @@ from qwen_tts_engine.models import (
     install_model,
     list_models,
 )
-from qwen_tts_engine.paths import RuntimePaths
-from qwen_tts_engine.protocol import EngineError
 from qwen_tts_engine.runtime import QwenRuntime
+from qwen_tts_engine.server import EngineError
+from qwen_tts_engine.storage import RuntimePaths
 
 
 CUSTOM_VOICE_MODEL = "qwen3-tts-12hz-1.7b-customvoice"
@@ -99,7 +98,10 @@ def test_runtime_warmup_caches_dependencies_and_uses_stderr(monkeypatch, capsys)
             return _DummyQwenModule
         raise AssertionError(f"unexpected import: {name}")
 
-    monkeypatch.setattr("qwen_tts_engine.runtime.importlib.import_module", fake_import_module)
+    monkeypatch.setattr(
+        "qwen_tts_engine.runtime.qwen.importlib.import_module",
+        fake_import_module,
+    )
 
     dependencies = QwenRuntime.warmup_dependencies()
     captured = capsys.readouterr()
@@ -125,7 +127,11 @@ def test_runtime_load_reuses_warmed_dependencies(monkeypatch, tmp_path):
     }
     _DummyModelClass.calls = []
 
-    monkeypatch.setattr(QwenRuntime, "warmup_dependencies", classmethod(lambda cls: QwenRuntime._dependencies))
+    monkeypatch.setattr(
+        QwenRuntime,
+        "warmup_dependencies",
+        classmethod(lambda cls: QwenRuntime._dependencies),
+    )
 
     runtime = QwenRuntime(device="cpu", dtype="float32")
     model_dir = tmp_path / "model"

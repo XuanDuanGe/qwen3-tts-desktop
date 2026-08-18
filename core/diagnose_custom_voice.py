@@ -4,8 +4,8 @@ from pathlib import Path
 
 import soundfile as sf
 
-from qwen_tts_engine.paths import RuntimePaths
 from qwen_tts_engine.runtime import QwenRuntime
+from qwen_tts_engine.storage import RuntimePaths
 
 
 def main():

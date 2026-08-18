@@ -1,24 +1,19 @@
-import { BrowserWindow, ipcMain, app } from 'electron';
-import { copyFile, access, readFile } from 'node:fs/promises';
+import { app, ipcMain } from 'electron';
+import { access, copyFile, readFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { join } from 'node:path';
 import { getEnginePaths } from '../engine/paths.js';
+import { getManager, requireString, validateSender } from './common.js';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function validateSender(event) {
-  const window = BrowserWindow.fromWebContents(event.sender);
-  if (!window || window.isDestroyed()) {
-    throw new Error('Invalid renderer window');
-  }
-}
-
 function requireArtifactId(artifactId) {
-  if (typeof artifactId !== 'string' || !UUID_PATTERN.test(artifactId)) {
+  const value = requireString(artifactId, 'artifactId');
+  if (!UUID_PATTERN.test(value)) {
     throw new Error('artifactId must be a valid UUID');
   }
-  return artifactId.toLowerCase();
+  return value.toLowerCase();
 }
 
 function getArtifactPath(artifactId) {
@@ -35,7 +30,21 @@ async function requireArtifactFile(artifactId) {
   return path;
 }
 
-export function registerArtifactHandlers() {
+export function registerArtifactHandlers(manager) {
+  ipcMain.handle('artifacts:get', (event, artifactId) => {
+    const engine = getManager(event, manager);
+    return engine.request('artifacts.get', {
+      artifactId: requireArtifactId(artifactId),
+    });
+  });
+
+  ipcMain.handle('artifacts:delete', (event, artifactId) => {
+    const engine = getManager(event, manager);
+    return engine.request('artifacts.delete', {
+      artifactId: requireArtifactId(artifactId),
+    });
+  });
+
   ipcMain.handle('artifacts:read', async (event, artifactId) => {
     validateSender(event);
     const path = await requireArtifactFile(requireArtifactId(artifactId));

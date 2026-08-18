@@ -1,8 +1,5 @@
-import { BrowserWindow, ipcMain } from 'electron';
-
-function getWindow(event) {
-  return BrowserWindow.fromWebContents(event.sender);
-}
+import { ipcMain } from 'electron';
+import { getWindow } from './common.js';
 
 export function registerWindowControlHandlers() {
   ipcMain.handle('window:minimize', (event) => {
