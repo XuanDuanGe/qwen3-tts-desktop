@@ -1,7 +1,6 @@
 export default {
   content: [
     './index.html',
-    './src/renderer/index.html',
     './src/renderer/src/**/*.{js,jsx}',
   ],
   theme: {
@@ -19,6 +18,7 @@ export default {
         text: '#E6E9EC',
         'text-muted': '#9AA3AB',
         'text-subtle': '#6F7881',
+        label: '#C5CCD2',
         success: '#67C587',
         info: '#5AA9FA',
         warn: '#E7C66A',
@@ -28,6 +28,17 @@ export default {
       },
       borderRadius: {
         ui: '8px',
+      },
+      keyframes: {
+        'status-pulse': {
+          '50%': {
+            boxShadow: '0 0 0 4px transparent',
+            opacity: '0.65',
+          },
+        },
+      },
+      animation: {
+        'status-pulse': 'status-pulse 2s ease-in-out infinite',
       },
     },
   },

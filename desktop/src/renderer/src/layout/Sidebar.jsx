@@ -19,12 +19,12 @@ export default function Sidebar() {
   }, []);
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar__brand">
+    <aside className="w-[208px] flex-none border-r border-border bg-canvas">
+      <div className="flex flex-col gap-0.5 border-b border-border px-4 py-5 text-[13px] font-semibold text-text">
         <span>QWEN TTS</span>
-        <small>Desktop</small>
+        <small className="text-[11px] font-medium text-text-subtle">Desktop</small>
       </div>
-      <nav className="sidebar__nav">
+      <nav className="grid gap-1.5 p-3">
         {APP_ROUTE_ITEMS.map(({ path, label, end }) => {
           const Icon = ICONS[path];
           return (
@@ -33,7 +33,11 @@ export default function Sidebar() {
               to={path}
               end={end}
               className={({ isActive }) =>
-                `sidebar__link${isActive ? ' sidebar__link--active' : ''}`
+                `flex h-[38px] items-center gap-2.5 rounded-ui border px-2.5 text-sm no-underline transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 ${
+                  isActive
+                    ? 'border-primary-muted bg-primary-muted text-primary'
+                    : 'border-transparent text-text-muted hover:border-border hover:bg-panel hover:text-text'
+                }`
               }
             >
               <Icon aria-hidden="true" />

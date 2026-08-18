@@ -10,6 +10,22 @@ import { CUSTOM_VOICE_MODELS, JOB_STATUS_TEXT } from './constants';
 import useVoiceGenerateFormStore from './store';
 import { toBytes } from './utils';
 
+const pageClass = 'mx-auto max-w-[760px] px-7 pb-12 pt-8';
+const headerClass = 'mb-6 flex items-center justify-between gap-4';
+const eyebrowClass = 'mb-1.5 text-[11px] font-bold tracking-[0.14em] text-primary';
+const titleClass = 'm-0 text-2xl font-semibold text-text';
+const fieldClass = 'grid gap-2 text-[13px] text-label';
+const radioGroupClass = 'flex flex-wrap items-center gap-[18px] text-[13px] text-label';
+const controlClass =
+  'box-border w-full rounded-ui border border-border bg-panel px-3 text-text outline-none transition placeholder:text-text-subtle focus:border-primary focus:ring-1 focus:ring-primary';
+const selectClass = `${controlClass} h-10`;
+const textareaClass = `${controlClass} min-h-[88px] resize-y py-[11px]`;
+const secondaryButtonClass =
+  'inline-flex min-h-10 w-fit items-center justify-center rounded-ui border border-primary bg-transparent px-4 font-semibold text-primary transition hover:bg-primary hover:text-canvas focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+const primaryButtonClass =
+  'inline-flex min-h-10 items-center justify-center rounded-ui border border-primary bg-primary px-4 font-semibold text-canvas transition hover:bg-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+const previewClass = 'mt-6 rounded-ui border border-border bg-panel p-[18px]';
+
 export default function VoiceGeneratePage() {
   const status = useEngineStore((state) => state.status);
   const models = useEngineStore((state) => state.models);
@@ -220,17 +236,17 @@ export default function VoiceGeneratePage() {
   }
 
   return (
-    <section className="voice-generate">
-      <header className="voice-generate__header">
+    <section className={pageClass}>
+      <header className={headerClass}>
         <div>
-          <p className="voice-generate__eyebrow">QWEN3 TTS</p>
-          <h1>声音生成</h1>
+          <p className={eyebrowClass}>QWEN3 TTS</p>
+          <h1 className={titleClass}>声音生成</h1>
         </div>
       </header>
-      <form className="voice-generate__form" onSubmit={handleSubmit}>
-        <label className="voice-generate__field">
+      <form className="grid gap-4" onSubmit={handleSubmit}>
+        <label className={fieldClass}>
           <span>模型</span>
-          <select value={modelId} onChange={handleModelChange}>
+          <select className={selectClass} value={modelId} onChange={handleModelChange}>
             <option value="">请选择模型</option>
             {availableModels.map((model) => (
               <option key={model.modelId} value={model.modelId}>
@@ -241,34 +257,34 @@ export default function VoiceGeneratePage() {
           </select>
         </label>
         <button
-          className="voice-generate__secondary-button"
+          className={secondaryButtonClass}
           type="button"
           disabled={!modelId || loadingCapabilities || status !== 'ready'}
           onClick={handleCapabilities}
         >
           {loadingCapabilities ? '获取中…' : '获取模型能力'}
         </button>
-        <label className="voice-generate__field">
+        <label className={fieldClass}>
           <span>输入文本</span>
-          <textarea
+          <textarea className={textareaClass}
             rows="6"
             value={text}
             onChange={(event) => setForm({ text: event.target.value })}
             placeholder="输入要转换为语音的文本"
           />
         </label>
-        <label className="voice-generate__field">
+        <label className={fieldClass}>
           <span>声音特征描述</span>
-          <textarea
+          <textarea className={textareaClass}
             rows="3"
             value={instruct}
             onChange={(event) => setForm({ instruct: event.target.value })}
             placeholder="可选，例如：用温柔、自然的语气朗读"
           />
         </label>
-        <label className="voice-generate__field">
+        <label className={fieldClass}>
           <span>发言人</span>
-          <select
+          <select className={selectClass}
             value={speaker}
             onChange={(event) => setForm({ speaker: event.target.value })}
           >
@@ -280,9 +296,9 @@ export default function VoiceGeneratePage() {
             ))}
           </select>
         </label>
-        <label className="voice-generate__field">
+        <label className={fieldClass}>
           <span>语言</span>
-          <select
+          <select className={selectClass}
             value={language}
             onChange={(event) => setForm({ language: event.target.value })}
           >
@@ -297,10 +313,11 @@ export default function VoiceGeneratePage() {
             )}
           </select>
         </label>
-        <fieldset className="voice-generate__field voice-generate__radio-group">
-          <legend>分段生成（按行切分文本）</legend>
-          <label>
+        <fieldset className={radioGroupClass}>
+          <legend className="mb-0.5 w-full">分段生成（按行切分文本）</legend>
+          <label className="inline-flex items-center gap-1.5 text-text-muted">
             <input
+              className="h-3.5 w-3.5 accent-primary"
               type="radio"
               name="splitByLine"
               checked={!splitByLine}
@@ -308,8 +325,9 @@ export default function VoiceGeneratePage() {
             />
             否
           </label>
-          <label>
+          <label className="inline-flex items-center gap-1.5 text-text-muted">
             <input
+              className="h-3.5 w-3.5 accent-primary"
               type="radio"
               name="splitByLine"
               checked={splitByLine}
@@ -319,7 +337,7 @@ export default function VoiceGeneratePage() {
           </label>
         </fieldset>
         <button
-          className="voice-generate__primary-button"
+          className={primaryButtonClass}
           type="submit"
           disabled={generating || installingModel}
         >
@@ -331,20 +349,20 @@ export default function VoiceGeneratePage() {
         </button>
       </form>
       {(pageError || storeError) && (
-        <p className="voice-generate__error">{pageError || storeError}</p>
+        <p className="m-0 mt-4 text-[13px] text-danger">{pageError || storeError}</p>
       )}
       {job && (
-        <p className="voice-generate__job-status">
+        <p className="m-0 mt-4 text-xs text-text-muted">
           任务状态：{jobMessage}（{Math.round((job.progress || 0) * 100)}%）
           {isActiveJob ? ` · 已运行 ${elapsedSeconds} s` : ''}
         </p>
       )}
       {currentArtifact && (
-        <section className="voice-generate__preview">
-          <div className="voice-generate__preview-header">
-            <h2>语音预览</h2>
+        <section className={previewClass}>
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h2 className="m-0 text-[17px] font-semibold text-text">语音预览</h2>
             <button
-              className="voice-generate__download-button"
+              className="inline-flex w-fit items-center justify-center gap-2 rounded-ui border border-primary bg-transparent px-4 text-primary transition hover:bg-primary hover:text-canvas focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               type="button"
               aria-label="下载语音"
               disabled={!currentArtifact}
@@ -354,7 +372,11 @@ export default function VoiceGeneratePage() {
               下载
             </button>
           </div>
-          {audioUrl ? <audio controls src={audioUrl} /> : <p>音频加载中…</p>}
+          {audioUrl ? (
+            <audio className="w-full" controls src={audioUrl} />
+          ) : (
+            <p className="m-0 text-[13px] text-text-muted">音频加载中…</p>
+          )}
         </section>
       )}
     </section>

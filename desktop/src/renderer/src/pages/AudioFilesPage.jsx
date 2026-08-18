@@ -12,6 +12,15 @@ import useMessageStore from '../store/messageStore';
 import { toBytes } from '../features/voice-generate/utils';
 
 const SELECT_DEBOUNCE_MS = 120;
+const pageClass = 'mx-auto max-w-[760px] px-7 pb-12 pt-8';
+const headerClass = 'mb-6 flex items-center justify-between gap-4';
+const eyebrowClass = 'mb-1.5 text-[11px] font-bold tracking-[0.14em] text-primary';
+const titleClass = 'm-0 text-2xl font-semibold text-text';
+const previewClass = 'mt-5 rounded-ui border border-border bg-panel p-4';
+const actionButtonClass =
+  'inline-flex min-h-10 w-fit items-center justify-center gap-2 rounded-ui border border-primary bg-transparent px-3.5 font-semibold text-primary transition hover:bg-primary hover:text-canvas focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+const iconButtonClass =
+  'grid h-9 w-9 min-w-[36px] place-items-center rounded-ui border border-primary bg-transparent p-0 text-primary transition hover:bg-primary hover:text-canvas focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 
 function formatArtifactName(fileName = '') {
   return fileName.replace(/\.wav$/i, '');
@@ -27,10 +36,15 @@ const AudioFilesRow = memo(function AudioFilesRow({
   onDelete,
 }) {
   const name = formatArtifactName(artifact.fileName) || artifact.fileName || '';
+  const rowClass = `grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-ui border px-3.5 py-3.5 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 ${
+    isSelected
+      ? 'border-primary bg-[#21262a]'
+      : 'border-border bg-panel hover:border-primary hover:bg-[#21262a]'
+  }`;
 
   return (
     <div
-      className={`audio-files-page__item${isSelected ? ' audio-files-page__item--active' : ''}`}
+      className={rowClass}
       role="button"
       tabIndex={0}
       title={name}
@@ -42,11 +56,13 @@ const AudioFilesRow = memo(function AudioFilesRow({
         }
       }}
     >
-      <span className="audio-files-page__item-name">{name}</span>
-      <span className="audio-files-page__item-actions">
+      <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-text">
+        {name}
+      </span>
+      <span className="inline-flex gap-2">
         <button
           type="button"
-          className="audio-files-page__icon-button"
+          className={iconButtonClass}
           onClick={(event) => {
             event.stopPropagation();
             onDownload(artifact.artifactId);
@@ -58,7 +74,11 @@ const AudioFilesRow = memo(function AudioFilesRow({
         </button>
         <button
           type="button"
-          className={`audio-files-page__icon-button${isDeleting ? ' audio-files-page__icon-button--danger' : ''}`}
+          className={`${iconButtonClass} ${
+            isDeleting
+              ? 'border-danger text-danger hover:bg-danger'
+              : ''
+          }`}
           onClick={(event) => {
             event.stopPropagation();
             onDelete(artifact.artifactId);
@@ -287,26 +307,28 @@ export default function AudioFilesPage() {
   );
 
   return (
-    <section className="audio-files-page">
-      <header className="audio-files-page__header">
+    <section className={pageClass}>
+      <header className={headerClass}>
         <div>
-          <p className="audio-files-page__eyebrow">AUDIO FILES</p>
-          <h1>音频文件</h1>
+          <p className={eyebrowClass}>AUDIO FILES</p>
+          <h1 className={titleClass}>音频文件</h1>
         </div>
       </header>
 
-      <section className="audio-files-page__preview">
-        <div className="audio-files-page__preview-header">
-          <div>
-            <h2>{selectedArtifact?.fileName ? formatArtifactName(selectedArtifact.fileName) : '暂无音频'}</h2>
-            <p>
+      <section className={previewClass}>
+        <div className="mb-3.5 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="m-0 truncate text-[17px] font-semibold text-text">
+              {selectedArtifact?.fileName ? formatArtifactName(selectedArtifact.fileName) : '暂无音频'}
+            </h2>
+            <p className="m-0 mt-1 text-xs text-text-muted">
               {selectedArtifact
                 ? `生成时间：${new Date(selectedArtifact.createdAt).toLocaleString()}`
                 : '点击下方列表中的音频文件进行预览。'}
             </p>
           </div>
           <button
-            className="audio-files-page__action-button"
+            className={actionButtonClass}
             type="button"
             disabled={!selectedArtifact || !audioUrl || busyArtifactId === audioArtifactId}
             onClick={handlePreviewDownload}
@@ -316,17 +338,17 @@ export default function AudioFilesPage() {
           </button>
         </div>
         {selectedArtifact && audioUrl && audioArtifactId === selectedArtifact.artifactId ? (
-          <audio controls src={audioUrl} />
+          <audio className="w-full" controls src={audioUrl} />
         ) : (
-          <p className="audio-files-page__empty">暂无可预览的音频。</p>
+          <p className="m-0 text-xs text-text-muted">暂无可预览的音频。</p>
         )}
       </section>
 
-      {pageError ? <p className="audio-files-page__error">{pageError}</p> : null}
+      {pageError ? <p className="mt-4 text-[13px] text-danger">{pageError}</p> : null}
 
-      <section className="audio-files-page__list">
+      <section className="mt-4 grid gap-2.5">
         {loading ? (
-          <p className="audio-files-page__empty">音频文件加载中…</p>
+          <p className="m-0 text-xs text-text-muted">音频文件加载中…</p>
         ) : artifacts.length ? (
           artifacts.map((artifact) => {
             const isSelected = artifact.artifactId === selectedArtifactId;
@@ -346,7 +368,7 @@ export default function AudioFilesPage() {
             );
           })
         ) : (
-          <p className="audio-files-page__empty">没有找到音频文件。</p>
+          <p className="m-0 text-xs text-text-muted">没有找到音频文件。</p>
         )}
       </section>
     </section>

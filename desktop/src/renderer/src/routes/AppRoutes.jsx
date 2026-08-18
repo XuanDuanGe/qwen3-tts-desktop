@@ -15,11 +15,11 @@ export default function AppRoutes() {
     <HashRouter>
       <TelemetryTracker />
       <MessageHost />
-      <div className="app-shell">
+      <div className="flex h-full flex-col bg-canvas">
         <TitleBar />
-        <div className="app-shell__body">
+        <div className="flex min-h-0 flex-1">
           <Sidebar />
-          <main className="app-shell__content">
+          <main className="min-w-0 flex-1 overflow-y-auto bg-surface">
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/voice-generate" element={<VoiceGeneratePage />} />
