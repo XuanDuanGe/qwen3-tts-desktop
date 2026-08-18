@@ -10,13 +10,14 @@ from qwen_tts_engine.runtime import QwenRuntime
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--model-id', default='qwen3-tts-12hz-0.6b-customvoice')
     parser.add_argument('--model-dir', required=True)
     parser.add_argument('--output-dir', required=True)
     parser.add_argument('--device', default='cpu')
     parser.add_argument('--dtype', default='float32')
     args = parser.parse_args()
 
-    model_id = 'qwen3-tts-12hz-1.7b-customvoice'
+    model_id = args.model_id
     model_dir = Path(args.model_dir).resolve()
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -27,9 +28,10 @@ def main():
 
     runtime = QwenRuntime(args.device, args.dtype)
     load_started = time.monotonic()
-    print(f'loading model: {model_dir}', flush=True)
+    print(f'loading model: {model_id}', flush=True)
     runtime.load(model_id, model_dir)
-    print(f'loaded in {time.monotonic() - load_started:.1f}s', flush=True)
+    load_elapsed = time.monotonic() - load_started
+    print(f'loaded in {load_elapsed:.3f}s', flush=True)
     generate_started = time.monotonic()
     wavs, sample_rate = runtime.generate(
         'custom_voice',
@@ -39,10 +41,12 @@ def main():
             'language': 'Chinese',
         },
     )
-    target = output_dir / 'qwen3-tts-1.7b-customvoice-ono-anna.wav'
+    generate_elapsed = time.monotonic() - generate_started
+    target = output_dir / f'{model_id.split("/")[-1].lower()}-ono-anna.wav'
 
     sf.write(target, wavs[0], sample_rate, format='WAV')
-    print(f'generated in {time.monotonic() - generate_started:.1f}s', flush=True)
+    print(f'generated in {generate_elapsed:.3f}s', flush=True)
+    print(f'total in {time.monotonic() - load_started:.3f}s', flush=True)
     print(f'output: {target}', flush=True)
     runtime.unload()
 

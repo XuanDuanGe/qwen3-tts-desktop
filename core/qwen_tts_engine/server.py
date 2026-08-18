@@ -154,11 +154,24 @@ class EngineServer:
         else:
             update("preparing", 0.1, "loading_model", "正在加载模型")
             self._log_message(f"loading model started model={model_id}")
+            stop_timer = threading.Event()
+
+            def report_loading_time():
+                elapsed = 0
+                while not stop_timer.wait(10):
+                    elapsed += 10
+                    self._log_message(f"loading model waiting elapsed_seconds={elapsed}")
+
+            timer = threading.Thread(target=report_loading_time, daemon=True)
+            timer.start()
             try:
                 self.runtime.load(model_id, self.paths.model_path(model_id))
             except Exception as exc:
                 self._log_message(f"loading model failed type={type(exc).__name__} error={exc}")
                 raise
+            finally:
+                stop_timer.set()
+                timer.join(timeout=1)
             self._log_message(
                 f"loading model completed duration_ms={int((time.monotonic() - load_started) * 1000)}"
             )
@@ -214,6 +227,9 @@ class EngineServer:
         if sample_rate is None:
             raise RuntimeError("model returned no sample rate")
         artifact = self.artifacts.write(wavs, sample_rate)
+        self._log_message(
+            f"artifact created mime_type={artifact['mimeType']} sample_rate={sample_rate}"
+        )
         self._emit("artifact.created", artifact)
         self._log_message(
             f"job completed duration_ms={int((time.monotonic() - started) * 1000)}"

@@ -12,6 +12,7 @@ const EVENTS = new Set([
   'generation_succeeded',
   'generation_failed',
   'artifact_downloaded',
+  'artifact_preview_ready',
 ]);
 const ROUTES = new Set(['home', 'voice_generate', 'voice_clone', 'settings']);
 const COMPONENTS = new Set([

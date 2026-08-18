@@ -92,6 +92,7 @@ export default function VoiceGeneratePage() {
           if (previous) URL.revokeObjectURL(previous);
           return url;
         });
+        track('artifact_preview_ready', { success: true });
       })
       .catch((error) => setPageError(error.message));
     return () => {

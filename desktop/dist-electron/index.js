@@ -440,7 +440,8 @@ const EVENTS = /* @__PURE__ */ new Set([
   "generation_submitted",
   "generation_succeeded",
   "generation_failed",
-  "artifact_downloaded"
+  "artifact_downloaded",
+  "artifact_preview_ready"
 ]);
 const ROUTES = /* @__PURE__ */ new Set(["home", "voice_generate", "voice_clone", "settings"]);
 const COMPONENTS = /* @__PURE__ */ new Set([
@@ -554,7 +555,13 @@ app.whenReady().then(async () => {
       "artifact.created": "engine:artifact-created"
     }[message.event];
     if (channel) {
+      if (message.event === "artifact.created") {
+        logger.info("artifact", "artifact created received; forwarding to renderer");
+      }
       mainWindow == null ? void 0 : mainWindow.webContents.send(channel, message.payload);
+      if (message.event === "artifact.created") {
+        logger.info("artifact", "artifact forwarded to renderer for preview");
+      }
     }
   });
   engine.on("stderr", (message) => {

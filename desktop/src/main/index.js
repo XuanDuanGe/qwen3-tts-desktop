@@ -55,7 +55,13 @@ app.whenReady().then(async () => {
       'artifact.created': 'engine:artifact-created',
     }[message.event];
     if (channel) {
+      if (message.event === 'artifact.created') {
+        logger.info('artifact', 'artifact created received; forwarding to renderer');
+      }
       mainWindow?.webContents.send(channel, message.payload);
+      if (message.event === 'artifact.created') {
+        logger.info('artifact', 'artifact forwarded to renderer for preview');
+      }
     }
   });
   engine.on('stderr', (message) => {
