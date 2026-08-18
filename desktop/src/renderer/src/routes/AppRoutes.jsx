@@ -19,7 +19,7 @@ export default function AppRoutes() {
         <TitleBar />
         <div className="flex min-h-0 flex-1">
           <Sidebar />
-          <main className="min-w-0 flex-1 overflow-y-auto bg-surface">
+          <main className="app-scrollbar min-w-0 flex-1 overflow-y-auto bg-surface">
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/voice-generate" element={<VoiceGeneratePage />} />

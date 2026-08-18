@@ -22,3 +22,73 @@ body {
 button {
   font: inherit;
 }
+
+.app-scrollbar,
+.app-scrollbar textarea {
+  scrollbar-width: thin;
+  scrollbar-color: #343a40 transparent;
+}
+
+.app-scrollbar::-webkit-scrollbar,
+.app-scrollbar textarea::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.app-scrollbar::-webkit-scrollbar-track,
+.app-scrollbar textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app-scrollbar::-webkit-scrollbar-thumb,
+.app-scrollbar textarea::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: #343a40;
+  background-clip: padding-box;
+}
+
+.app-scrollbar::-webkit-scrollbar-thumb:hover,
+.app-scrollbar textarea::-webkit-scrollbar-thumb:hover {
+  background: #4a525a;
+  background-clip: padding-box;
+}
+
+.select-control {
+  appearance: none;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239AA3AB' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+}
+
+.select-control:hover {
+  border-color: #4a525a;
+}
+
+.select-control option {
+  background: #1e2226;
+  color: #e6e9ec;
+}
+
+.audio-range {
+  appearance: none;
+  background: transparent;
+  accent-color: #00d1ce;
+}
+
+.audio-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 8px;
+  background: #343a40;
+}
+
+.audio-range::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  margin-top: -3px;
+  border: 0;
+  border-radius: 50%;
+  background: #00d1ce;
+  appearance: none;
+}

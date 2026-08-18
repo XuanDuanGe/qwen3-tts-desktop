@@ -20,7 +20,7 @@ export default function Sidebar() {
 
   return (
     <aside className="w-[208px] flex-none border-r border-border bg-canvas">
-      <div className="flex flex-col gap-0.5 border-b border-border px-4 py-5 text-[13px] font-semibold text-text">
+      <div className="flex flex-col gap-0.5 border-b border-border px-4 py-4 text-[13px] font-semibold text-text">
         <span>QWEN TTS</span>
         <small className="text-[11px] font-medium text-text-subtle">Desktop</small>
       </div>

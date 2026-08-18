@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FiDownload } from 'react-icons/fi';
+import AudioPlayer from '../../components/AudioPlayer';
 import { downloadArtifact, readArtifact } from '../../api/engine';
 import { getSettings } from '../../api/settings';
 import { track } from '../../api/telemetry';
@@ -10,21 +11,21 @@ import { CUSTOM_VOICE_MODELS, JOB_STATUS_TEXT } from './constants';
 import useVoiceGenerateFormStore from './store';
 import { toBytes } from './utils';
 
-const pageClass = 'mx-auto max-w-[760px] px-7 pb-12 pt-8';
-const headerClass = 'mb-6 flex items-center justify-between gap-4';
+const pageClass = 'mx-auto max-w-[760px] px-6 pb-8 pt-6';
+const headerClass = 'mb-5 flex items-center justify-between gap-4';
 const eyebrowClass = 'mb-1.5 text-[11px] font-bold tracking-[0.14em] text-primary';
 const titleClass = 'm-0 text-2xl font-semibold text-text';
 const fieldClass = 'grid gap-2 text-[13px] text-label';
 const radioGroupClass = 'flex flex-wrap items-center gap-[18px] text-[13px] text-label';
 const controlClass =
   'box-border w-full rounded-ui border border-border bg-panel px-3 text-text outline-none transition placeholder:text-text-subtle focus:border-primary focus:ring-1 focus:ring-primary';
-const selectClass = `${controlClass} h-10`;
-const textareaClass = `${controlClass} min-h-[88px] resize-y py-[11px]`;
+const selectClass = `${controlClass} select-control h-10`;
+const textareaClass = `${controlClass} app-scrollbar min-h-[88px] resize-y py-[11px]`;
 const secondaryButtonClass =
-  'inline-flex min-h-10 w-fit items-center justify-center rounded-ui border border-primary bg-transparent px-4 font-semibold text-primary transition hover:bg-primary hover:text-canvas focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex min-h-10 w-full items-center justify-center rounded-ui border border-primary bg-transparent px-4 font-semibold text-primary transition hover:bg-primary hover:text-canvas focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center rounded-ui border border-primary bg-primary px-4 font-semibold text-canvas transition hover:bg-primary-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
-const previewClass = 'mt-6 rounded-ui border border-border bg-panel p-[18px]';
+const previewClass = 'mt-5 rounded-ui border border-border bg-panel p-4';
 
 export default function VoiceGeneratePage() {
   const status = useEngineStore((state) => state.status);
@@ -243,7 +244,7 @@ export default function VoiceGeneratePage() {
           <h1 className={titleClass}>声音生成</h1>
         </div>
       </header>
-      <form className="grid gap-4" onSubmit={handleSubmit}>
+      <form className="grid gap-3.5" onSubmit={handleSubmit}>
         <label className={fieldClass}>
           <span>模型</span>
           <select className={selectClass} value={modelId} onChange={handleModelChange}>
@@ -373,7 +374,7 @@ export default function VoiceGeneratePage() {
             </button>
           </div>
           {audioUrl ? (
-            <audio className="w-full" controls src={audioUrl} />
+            <AudioPlayer key={audioUrl} src={audioUrl} />
           ) : (
             <p className="m-0 text-[13px] text-text-muted">音频加载中…</p>
           )}

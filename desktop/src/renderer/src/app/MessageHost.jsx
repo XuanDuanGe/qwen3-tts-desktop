@@ -42,7 +42,7 @@ export default function MessageHost() {
 
   return (
     <div
-      className="pointer-events-none fixed right-5 top-12 z-50 grid w-[min(360px,calc(100vw-40px))] gap-3"
+      className="pointer-events-none fixed right-5 top-12 z-50 grid w-[min(360px,calc(100vw-40px))] gap-2"
       aria-live="polite"
       aria-atomic="true"
     >
@@ -52,7 +52,7 @@ export default function MessageHost() {
         return (
           <div
             key={message.id}
-            className={`grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-xl border bg-panel/95 p-3.5 pl-3 shadow-2xl backdrop-blur transition-[opacity,transform] duration-200 ${
+            className={`grid grid-cols-[auto_1fr_auto] items-start gap-3 rounded-ui border bg-panel p-3 pl-3 transition-[opacity,transform] duration-200 ${
               message.visible ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0'
             } ${meta.classes}`}
             role="status"
@@ -67,7 +67,7 @@ export default function MessageHost() {
               </span>
             </div>
             <button
-              className="grid h-6 w-6 place-items-center rounded-md border-0 bg-transparent text-text-muted transition hover:bg-elevated hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
+              className="grid h-6 w-6 place-items-center rounded-ui border-0 bg-transparent text-text-muted transition hover:bg-elevated hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2"
               type="button"
               aria-label="关闭消息"
               onClick={() => remove(message.id)}

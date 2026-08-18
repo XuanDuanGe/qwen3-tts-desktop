@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react';
 import { getSettings, saveSettings } from '../api/settings';
 import useMessageStore from '../store/messageStore';
 
-const pageClass = 'mx-auto max-w-[760px] px-7 pb-12 pt-8';
-const headerClass = 'mb-6 flex items-center justify-between gap-4';
+const pageClass = 'mx-auto max-w-[760px] px-6 pb-8 pt-6';
+const headerClass = 'mb-5 flex items-center justify-between gap-4';
 const eyebrowClass = 'mb-1.5 text-[11px] font-bold tracking-[0.14em] text-primary';
 const titleClass = 'm-0 text-2xl font-semibold text-text';
-const fieldClass = 'grid gap-2 text-[13px] text-[#c5ccd2]';
+const fieldClass = 'grid gap-2 text-[13px] text-label';
 const inputClass =
   'box-border h-10 w-full rounded-ui border border-border bg-panel px-3 text-text outline-none transition placeholder:text-text-subtle focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-50';
 
@@ -72,7 +72,7 @@ export default function SettingsPage() {
           <h1 className={titleClass}>设置</h1>
         </div>
       </header>
-      <form className="grid gap-4" onSubmit={handleSave}>
+      <form className="grid gap-3.5" onSubmit={handleSave}>
         <label className={fieldClass}>
           <span>模型下载代理</span>
           <input

@@ -1,5 +1,7 @@
+/* eslint-disable react/prop-types */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FiDownload, FiTrash2 } from 'react-icons/fi';
+import AudioPlayer from '../components/AudioPlayer';
 import {
   deleteArtifact,
   downloadArtifact,
@@ -12,11 +14,11 @@ import useMessageStore from '../store/messageStore';
 import { toBytes } from '../features/voice-generate/utils';
 
 const SELECT_DEBOUNCE_MS = 120;
-const pageClass = 'mx-auto max-w-[760px] px-7 pb-12 pt-8';
-const headerClass = 'mb-6 flex items-center justify-between gap-4';
+const pageClass = 'mx-auto max-w-[760px] px-6 pb-8 pt-6';
+const headerClass = 'mb-5 flex items-center justify-between gap-4';
 const eyebrowClass = 'mb-1.5 text-[11px] font-bold tracking-[0.14em] text-primary';
 const titleClass = 'm-0 text-2xl font-semibold text-text';
-const previewClass = 'mt-5 rounded-ui border border-border bg-panel p-4';
+const previewClass = 'rounded-ui border border-border bg-panel p-4';
 const actionButtonClass =
   'inline-flex min-h-10 w-fit items-center justify-center gap-2 rounded-ui border border-primary bg-transparent px-3.5 font-semibold text-primary transition hover:bg-primary hover:text-canvas focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50';
 const iconButtonClass =
@@ -36,10 +38,10 @@ const AudioFilesRow = memo(function AudioFilesRow({
   onDelete,
 }) {
   const name = formatArtifactName(artifact.fileName) || artifact.fileName || '';
-  const rowClass = `grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-ui border px-3.5 py-3.5 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 ${
+  const rowClass = `grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-ui border px-3.5 py-3 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 ${
     isSelected
-      ? 'border-primary bg-[#21262a]'
-      : 'border-border bg-panel hover:border-primary hover:bg-[#21262a]'
+      ? 'border-primary bg-elevated'
+      : 'border-border bg-panel hover:border-primary hover:bg-elevated'
   }`;
 
   return (
@@ -181,13 +183,6 @@ export default function AudioFilesPage() {
 
   useEffect(() => {
     if (!selectedArtifact?.artifactId) {
-      setAudioArtifactId('');
-      setAudioUrl((previous) => {
-        if (previous) {
-          URL.revokeObjectURL(previous);
-        }
-        return '';
-      });
       return undefined;
     }
     let active = true;
@@ -280,6 +275,15 @@ export default function AudioFilesPage() {
           const fallback = nextArtifacts[deletedIndex] || nextArtifacts[deletedIndex - 1] || nextArtifacts[0];
           nextSelectedId = fallback?.artifactId || '';
         }
+        if (!nextSelectedId) {
+          setAudioArtifactId('');
+          setAudioUrl((previous) => {
+            if (previous) {
+              URL.revokeObjectURL(previous);
+            }
+            return '';
+          });
+        }
         setArtifacts(nextArtifacts);
         setDeleteConfirmId('');
         setSelectedArtifactId(nextSelectedId);
@@ -338,7 +342,7 @@ export default function AudioFilesPage() {
           </button>
         </div>
         {selectedArtifact && audioUrl && audioArtifactId === selectedArtifact.artifactId ? (
-          <audio className="w-full" controls src={audioUrl} />
+          <AudioPlayer key={audioUrl} src={audioUrl} />
         ) : (
           <p className="m-0 text-xs text-text-muted">暂无可预览的音频。</p>
         )}

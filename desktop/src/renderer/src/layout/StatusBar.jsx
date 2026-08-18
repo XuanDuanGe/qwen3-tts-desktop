@@ -26,7 +26,7 @@ export default function StatusBar() {
   const meta = STATUS_META[status] || STATUS_META.unknown;
 
   return (
-    <footer className="flex h-[30px] flex-none select-none items-center justify-between border-t border-border bg-canvas px-3 text-[11px] text-text-muted">
+    <footer className="flex h-[36px] flex-none select-none items-center justify-between border-t border-border bg-canvas px-3 text-[11px] text-text-muted">
       <span className="inline-flex items-center gap-1.5" aria-live="polite">
         <span className={`h-[7px] w-[7px] rounded-full ${meta.indicator}`} aria-hidden="true" />
         {meta.label}
