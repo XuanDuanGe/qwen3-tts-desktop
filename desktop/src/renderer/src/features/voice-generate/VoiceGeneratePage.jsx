@@ -13,10 +13,12 @@ import { toBytes } from './utils';
 
 const pageClass = 'mx-auto max-w-[760px] px-6 pb-8 pt-6';
 const headerClass = 'mb-5 flex items-center justify-between gap-4';
-const eyebrowClass = 'mb-1.5 text-[11px] font-bold tracking-[0.14em] text-primary';
+const eyebrowClass =
+  'mb-1.5 text-[11px] font-bold tracking-[0.14em] text-primary';
 const titleClass = 'm-0 text-2xl font-semibold text-text';
 const fieldClass = 'grid gap-2 text-[13px] text-label';
-const radioGroupClass = 'flex flex-wrap items-center gap-[18px] text-[13px] text-label';
+const radioGroupClass =
+  'flex flex-wrap items-center gap-[18px] text-[13px] text-label';
 const controlClass =
   'box-border w-full rounded-ui border border-border bg-panel px-3 text-text outline-none transition placeholder:text-text-subtle focus:border-primary focus:ring-1 focus:ring-primary';
 const selectClass = `${controlClass} select-control h-10`;
@@ -47,7 +49,15 @@ export default function VoiceGeneratePage() {
   );
   const form = useVoiceGenerateFormStore((state) => state.form);
   const setForm = useVoiceGenerateFormStore((state) => state.setForm);
-  const { modelId, capabilities, text, instruct, speaker, language, splitByLine } = form;
+  const {
+    modelId,
+    capabilities,
+    text,
+    instruct,
+    speaker,
+    language,
+    splitByLine,
+  } = form;
   const [jobId, setJobId] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
   const [pageError, setPageError] = useState('');
@@ -70,12 +80,16 @@ export default function VoiceGeneratePage() {
   );
   const elapsedSeconds = isActiveJob
     ? now
-      ? ((now / 1000) - job.startedAt).toFixed(1)
+      ? (now / 1000 - job.startedAt).toFixed(1)
       : '0.0'
     : '';
 
   useEffect(() => {
-    track('component_used', { component: 'voice_generate_page' }, { once: true });
+    track(
+      'component_used',
+      { component: 'voice_generate_page' },
+      { once: true },
+    );
   }, []);
 
   useEffect(() => {
@@ -99,14 +113,14 @@ export default function VoiceGeneratePage() {
   }, []);
 
   useEffect(() => {
-    if (!currentArtifact?.artifactId) {
-      return undefined;
-    }
+    if (!currentArtifact?.artifactId) return undefined;
+
     let active = true;
+    let url = '';
     readArtifact(currentArtifact.artifactId)
       .then((value) => {
         if (!active) return;
-        const url = URL.createObjectURL(
+        url = URL.createObjectURL(
           new Blob([toBytes(value)], {
             type: currentArtifact.mimeType || 'audio/wav',
           }),
@@ -117,9 +131,12 @@ export default function VoiceGeneratePage() {
         });
         track('artifact_preview_ready', { success: true });
       })
-      .catch((error) => setPageError(error.message));
+      .catch((error) => {
+        if (active) setPageError(error.message);
+      });
     return () => {
       active = false;
+      if (url) URL.revokeObjectURL(url);
     };
   }, [currentArtifact]);
 
@@ -169,7 +186,10 @@ export default function VoiceGeneratePage() {
       pushMessage({ level: 'success', content: '模型能力已加载。' });
     } catch (error) {
       setPageError(error.message);
-      pushMessage({ level: 'error', content: `加载模型能力失败：${error.message}` });
+      pushMessage({
+        level: 'error',
+        content: `加载模型能力失败：${error.message}`,
+      });
     } finally {
       setLoadingCapabilities(false);
     }
@@ -232,7 +252,10 @@ export default function VoiceGeneratePage() {
     } catch (error) {
       track('generation_failed', { code: error.code || 'unknown' });
       setPageError(error.message);
-      pushMessage({ level: 'error', content: `下载音频文件失败：${error.message}` });
+      pushMessage({
+        level: 'error',
+        content: `下载音频文件失败：${error.message}`,
+      });
     }
   }
 
@@ -247,7 +270,11 @@ export default function VoiceGeneratePage() {
       <form className="grid gap-3.5" onSubmit={handleSubmit}>
         <label className={fieldClass}>
           <span>模型</span>
-          <select className={selectClass} value={modelId} onChange={handleModelChange}>
+          <select
+            className={selectClass}
+            value={modelId}
+            onChange={handleModelChange}
+          >
             <option value="">请选择模型</option>
             {availableModels.map((model) => (
               <option key={model.modelId} value={model.modelId}>
@@ -267,7 +294,8 @@ export default function VoiceGeneratePage() {
         </button>
         <label className={fieldClass}>
           <span>输入文本</span>
-          <textarea className={textareaClass}
+          <textarea
+            className={textareaClass}
             rows="6"
             value={text}
             onChange={(event) => setForm({ text: event.target.value })}
@@ -276,7 +304,8 @@ export default function VoiceGeneratePage() {
         </label>
         <label className={fieldClass}>
           <span>声音特征描述</span>
-          <textarea className={textareaClass}
+          <textarea
+            className={textareaClass}
             rows="3"
             value={instruct}
             onChange={(event) => setForm({ instruct: event.target.value })}
@@ -285,7 +314,8 @@ export default function VoiceGeneratePage() {
         </label>
         <label className={fieldClass}>
           <span>发言人</span>
-          <select className={selectClass}
+          <select
+            className={selectClass}
             value={speaker}
             onChange={(event) => setForm({ speaker: event.target.value })}
           >
@@ -299,7 +329,8 @@ export default function VoiceGeneratePage() {
         </label>
         <label className={fieldClass}>
           <span>语言</span>
-          <select className={selectClass}
+          <select
+            className={selectClass}
             value={language}
             onChange={(event) => setForm({ language: event.target.value })}
           >
@@ -350,7 +381,9 @@ export default function VoiceGeneratePage() {
         </button>
       </form>
       {(pageError || storeError) && (
-        <p className="m-0 mt-4 text-[13px] text-danger">{pageError || storeError}</p>
+        <p className="m-0 mt-4 text-[13px] text-danger">
+          {pageError || storeError}
+        </p>
       )}
       {job && (
         <p className="m-0 mt-4 text-xs text-text-muted">
@@ -361,7 +394,9 @@ export default function VoiceGeneratePage() {
       {currentArtifact && (
         <section className={previewClass}>
           <div className="mb-4 flex items-center justify-between gap-4">
-            <h2 className="m-0 text-[17px] font-semibold text-text">语音预览</h2>
+            <h2 className="m-0 text-[17px] font-semibold text-text">
+              语音预览
+            </h2>
             <button
               className="inline-flex w-fit items-center justify-center gap-2 rounded-ui border border-primary bg-transparent px-4 text-primary transition hover:bg-primary hover:text-canvas focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               type="button"

@@ -7,12 +7,16 @@ function formatTime(value) {
     return '--:--';
   }
   const minutes = Math.floor(value / 60);
-  const seconds = Math.floor(value % 60).toString().padStart(2, '0');
+  const seconds = Math.floor(value % 60)
+    .toString()
+    .padStart(2, '0');
   return `${minutes}:${seconds}`;
 }
 
 export default function AudioPlayer({ src }) {
   const audioRef = useRef(null);
+  const safeSrc = typeof src === 'string' && src.startsWith('blob:') ? src : '';
+
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -84,7 +88,7 @@ export default function AudioPlayer({ src }) {
         key={src}
         ref={audioRef}
         className="hidden"
-        src={src}
+        src={safeSrc}
         preload="metadata"
         onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={handleTimeUpdate}
@@ -101,14 +105,21 @@ export default function AudioPlayer({ src }) {
         aria-label={playing ? '暂停音频' : '播放音频'}
         onClick={togglePlayback}
       >
-        {playing ? <FiPause aria-hidden="true" /> : <FiPlay aria-hidden="true" />}
+        {playing ? (
+          <FiPause aria-hidden="true" />
+        ) : (
+          <FiPlay aria-hidden="true" />
+        )}
       </button>
       <span className="w-9 flex-none text-right font-mono text-[11px] tabular-nums text-text-muted">
         {formatTime(currentTime)}
       </span>
       <div className="relative min-w-0 flex-1">
         <div className="h-1.5 overflow-hidden rounded-full bg-border">
-          <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
+          <div
+            className="h-full bg-primary"
+            style={{ width: `${progress}%` }}
+          />
         </div>
         <input
           className="audio-range peer absolute inset-0 h-4 w-full cursor-pointer opacity-0"
@@ -131,7 +142,11 @@ export default function AudioPlayer({ src }) {
         aria-label={volume ? '静音' : '恢复音量'}
         onClick={toggleMute}
       >
-        {volume ? <FiVolume2 aria-hidden="true" /> : <FiVolumeX aria-hidden="true" />}
+        {volume ? (
+          <FiVolume2 aria-hidden="true" />
+        ) : (
+          <FiVolumeX aria-hidden="true" />
+        )}
       </button>
       <input
         className="audio-range h-1.5 w-16 flex-none cursor-pointer accent-primary"

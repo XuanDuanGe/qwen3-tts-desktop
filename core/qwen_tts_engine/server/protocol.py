@@ -15,6 +15,15 @@ def require(value, name):
     return value
 
 
+def require_string(value, name, max_length=None):
+    if not isinstance(value, str) or not value.strip():
+        raise EngineError("invalid_request", f"{name} must be a non-empty string")
+    value = value.strip()
+    if max_length is not None and len(value) > max_length:
+        raise EngineError("invalid_request", f"{name} is too long")
+    return value
+
+
 def response(request_id, result):
     return {
         "protocolVersion": PROTOCOL_VERSION,

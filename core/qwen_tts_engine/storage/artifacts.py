@@ -1,6 +1,5 @@
 import json
 import os
-import time
 import uuid
 from datetime import datetime
 
@@ -36,12 +35,9 @@ class ArtifactStore:
             }
             self.metadata[artifact_id] = artifact
 
-    def _next_file_name(self):
-        file_name = datetime.now().strftime('%Y-%m-%d-%H-%M-%S.wav')
-        while self.paths.artifact_audio_path(file_name).exists():
-            time.sleep(1)
-            file_name = datetime.now().strftime('%Y-%m-%d-%H-%M-%S.wav')
-        return file_name
+    @staticmethod
+    def _next_file_name():
+        return f"{datetime.now():%Y-%m-%d-%H-%M-%S}-{uuid.uuid4().hex[:8]}.wav"
 
     def _resolve_audio_path(self, artifact):
         return self.paths.artifact_audio_path(artifact['fileName'])

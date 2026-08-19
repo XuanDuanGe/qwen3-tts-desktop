@@ -14,7 +14,7 @@ from ..models import (
 )
 from ..runtime import QwenRuntime
 from ..storage import ArtifactStore, ReferenceStore, RuntimePaths
-from .protocol import EngineError, error_response, event, require, response
+from .protocol import EngineError, error_response, event, require, require_string, response
 
 
 class EngineServer:
@@ -52,10 +52,12 @@ class EngineServer:
         self.close()
 
     def handle(self, request):
-        if request.get("protocolVersion") != 1:
+        if not isinstance(request, dict) or request.get("protocolVersion") != 1:
             raise EngineError("invalid_request", "unsupported protocol version")
         method = request.get("method")
         params = request.get("params") or {}
+        if not isinstance(params, dict):
+            raise EngineError("invalid_request", "params must be an object")
         if method == "engine.hello":
             return {"engine": "qwen-tts-engine", "protocolVersion": 1}
         if method == "engine.health":
@@ -103,9 +105,9 @@ class EngineServer:
             self._log_message("job worker did not stop before shutdown timeout")
 
     def _submit(self, params):
-        kind = require(params.get("kind"), "kind")
-        model_id = require(params.get("modelId"), "modelId")
-        text = require(params.get("text"), "text")
+        kind = require_string(params.get("kind"), "kind", 64)
+        model_id = require_string(params.get("modelId"), "modelId", 128)
+        text = require_string(params.get("text"), "text", 20_000)
         model = get_model(model_id)
         if model is None:
             raise EngineError("model_not_found", "unknown model")
@@ -120,21 +122,24 @@ class EngineServer:
             if language not in capabilities["languages"]:
                 raise EngineError("invalid_language", "unsupported language")
         if kind == "voice_design":
-            require(params.get("instruct"), "instruct")
+            require_string(params.get("instruct"), "instruct", 4_000)
         if kind == "voice_clone":
-            reference_id = require(params.get("referenceAudioId"), "referenceAudioId")
+            reference_id = require_string(params.get("referenceAudioId"), "referenceAudioId", 128)
             self.references.resolve(reference_id)
+        sampling = params.get("sampling")
+        if sampling is not None and not isinstance(sampling, dict):
+            raise EngineError("invalid_request", "sampling must be an object")
         return self.queue.submit({**params, "text": text})
 
     def _capabilities(self, params):
-        model_id = require(params.get("modelId"), "modelId")
+        model_id = require_string(params.get("modelId"), "modelId", 128)
         capabilities = get_capabilities(model_id)
         if capabilities is None:
             raise EngineError("model_not_found", "unknown model")
         return capabilities
 
     def _install_model(self, params):
-        model_id = require(params.get("modelId"), "modelId")
+        model_id = require_string(params.get("modelId"), "modelId", 128)
         proxy = params.get("proxy")
         if proxy is not None and not isinstance(proxy, str):
             raise EngineError("invalid_request", "proxy must be a string")

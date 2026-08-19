@@ -9,9 +9,9 @@ import {
   unlink,
 } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { getEnginePaths } from '../engine/paths.js';
-import { getManager, requireString, validateSender } from './common.js';
+import { getManager, requireArtifactId, validateSender } from './common.js';
 import { readSettings } from './settings.js';
 
 function pad(value) {
@@ -60,10 +60,17 @@ async function loadArtifactRecord(artifactId) {
   const metaPath = getArtifactJsonPath(artifactId);
   const meta = await readJson(metaPath);
   if (meta) {
-    const fileName =
+    const configuredName =
       typeof meta.fileName === 'string' && meta.fileName.trim()
         ? meta.fileName.trim()
         : `${artifactId}.wav`;
+    if (
+      basename(configuredName) !== configuredName ||
+      !configuredName.endsWith('.wav')
+    ) {
+      return null;
+    }
+    const fileName = configuredName;
     const audioPath = getArtifactAudioPath(fileName);
     try {
       await access(audioPath, constants.R_OK);
@@ -84,7 +91,12 @@ async function loadArtifactRecord(artifactId) {
   const fallbackPath = getArtifactAudioPath(fallbackName);
   try {
     await access(fallbackPath, constants.R_OK);
-    return buildRecord(artifactId, fallbackName, null, await stat(fallbackPath));
+    return buildRecord(
+      artifactId,
+      fallbackName,
+      null,
+      await stat(fallbackPath),
+    );
   } catch {
     return null;
   }
@@ -97,10 +109,17 @@ async function listArtifactRecords() {
   const seenFiles = new Set();
 
   for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name.endsWith('.tmp.json')) {
+    if (
+      !entry.isFile() ||
+      !entry.name.endsWith('.json') ||
+      entry.name.endsWith('.tmp.json')
+    ) {
       continue;
     }
     const artifactId = entry.name.replace(/\.json$/i, '');
+    if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(artifactId)) {
+      continue;
+    }
     const record = await loadArtifactRecord(artifactId);
     if (!record) {
       continue;
@@ -121,7 +140,12 @@ async function listArtifactRecords() {
     const filePath = getArtifactAudioPath(entry.name);
     const fileStat = await stat(filePath);
     records.push(
-      await buildRecord(entry.name.replace(/\.wav$/i, ''), entry.name, null, fileStat),
+      await buildRecord(
+        entry.name.replace(/\.wav$/i, ''),
+        entry.name,
+        null,
+        fileStat,
+      ),
     );
   }
 
@@ -137,7 +161,7 @@ export function registerArtifactHandlers(manager) {
 
   ipcMain.handle('artifacts:get', async (event, artifactId) => {
     getManager(event, manager);
-    const record = await loadArtifactRecord(requireString(artifactId, 'artifactId'));
+    const record = await loadArtifactRecord(requireArtifactId(artifactId));
     if (!record) {
       throw new Error('Artifact not found');
     }
@@ -146,7 +170,7 @@ export function registerArtifactHandlers(manager) {
 
   ipcMain.handle('artifacts:delete', async (event, artifactId) => {
     getManager(event, manager);
-    const normalizedArtifactId = requireString(artifactId, 'artifactId');
+    const normalizedArtifactId = requireArtifactId(artifactId);
     const record = await loadArtifactRecord(normalizedArtifactId);
     if (!record) {
       throw new Error('Artifact not found');
@@ -160,7 +184,7 @@ export function registerArtifactHandlers(manager) {
 
   ipcMain.handle('artifacts:read', async (event, artifactId) => {
     validateSender(event);
-    const record = await loadArtifactRecord(requireString(artifactId, 'artifactId'));
+    const record = await loadArtifactRecord(requireArtifactId(artifactId));
     if (!record) {
       throw new Error('Artifact not found');
     }
@@ -169,7 +193,7 @@ export function registerArtifactHandlers(manager) {
 
   ipcMain.handle('artifacts:download', async (event, artifactId) => {
     validateSender(event);
-    const normalizedArtifactId = requireString(artifactId, 'artifactId');
+    const normalizedArtifactId = requireArtifactId(artifactId);
     const record = await loadArtifactRecord(normalizedArtifactId);
     if (!record) {
       throw new Error('Artifact not found');

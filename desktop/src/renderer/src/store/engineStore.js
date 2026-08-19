@@ -6,24 +6,34 @@ import {
   listModels,
 } from '../api/engine';
 
+let initializationId = 0;
+
 const useEngineStore = create((set) => ({
   status: 'unknown',
   models: [],
   error: null,
   initialize: async () => {
+    const requestId = ++initializationId;
     try {
       const status = await getEngineStatus();
+      if (requestId !== initializationId) return;
       set({ status, error: null });
-      if (status !== 'ready') {
-        return;
-      }
+      if (status !== 'ready') return;
+
       const result = await listModels();
-      set({ models: result.models, error: null });
+      if (requestId === initializationId) {
+        set({ models: result.models, error: null });
+      }
     } catch (error) {
-      set({ status: 'unavailable', error: error.message });
+      if (requestId === initializationId) {
+        set({ status: 'unavailable', error: error.message });
+      }
     }
   },
-  setStatus: (status) => set({ status }),
+  setStatus: (status) => {
+    initializationId += 1;
+    set({ status });
+  },
   setModels: (models) => set({ models }),
   getModelCapabilities: (modelId) => getModelCapabilities(modelId),
   installModel: async (modelId, proxy) => {

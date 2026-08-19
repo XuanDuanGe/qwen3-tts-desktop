@@ -21,7 +21,15 @@ export function requireString(value, name) {
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error(`${name} must be a non-empty string`);
   }
-  return value;
+  return value.trim();
+}
+
+export function requireArtifactId(value) {
+  const artifactId = requireString(value, 'artifactId');
+  if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(artifactId)) {
+    throw new Error('artifactId must be a UUID');
+  }
+  return artifactId;
 }
 
 export function requireObject(value, name) {
