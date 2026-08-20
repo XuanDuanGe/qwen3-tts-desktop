@@ -5,4 +5,27 @@
     output: 'release',
   },
   files: ['dist-electron/**', 'dist/**'],
+  extraResources: [
+    {
+      from: 'build-resources/engine',
+      to: 'engine',
+      filter: ['**/*'],
+    },
+  ],
+  asar: true,
+  win: {
+    signAndEditExecutable: false,
+    target: [
+      {
+        target: 'nsis',
+        arch: ['x64'],
+      },
+    ],
+  },
+  nsis: {
+    oneClick: false,
+    perMachine: false,
+    allowToChangeInstallationDirectory: true,
+  },
+  artifactName: '${productName}-${version}-win-${arch}-setup.${ext}',
 }

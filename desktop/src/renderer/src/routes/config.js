@@ -1,11 +1,5 @@
 export const APP_ROUTE_ITEMS = [
   {
-    path: '/',
-    label: '首页',
-    telemetry: 'home',
-    end: true,
-  },
-  {
     path: '/voice-generate',
     label: '语音生成',
     telemetry: 'voice_generate',

@@ -1,6 +1,6 @@
 {
   "name": "qwen3-tts-desktop",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "桌面工具",
   "private": true,
   "type": "module",
@@ -8,12 +8,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && electron-builder",
+    "engine:build": "python ../scripts/build_sidecar.py --python ../.venv/Scripts/python.exe",
+    "engine:build:ci": "python ../scripts/build_sidecar.py",
+    "engine:verify": "python ../scripts/verify_sidecar.py",
+    "package:win": "pnpm run engine:build && pnpm run engine:verify && vite build && pnpm run package:win:electron",
+    "package:win:electron": "node ../scripts/check_sidecar.mjs && electron-builder --win --x64",
+    "package:win:dir": "pnpm run engine:build && pnpm run engine:verify && vite build && pnpm run package:win:dir:electron",
+    "package:win:dir:electron": "node ../scripts/check_sidecar.mjs && electron-builder --win --x64 --dir",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
   "dependencies": {
-    "electron": "^43.4.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-icons": "^5.7.0",
@@ -22,6 +28,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "electron": "^43.4.0",
     "@vitejs/plugin-react": "4.3.4",
     "autoprefixer": "^10.5.4",
     "electron-builder": "^24.13.3",

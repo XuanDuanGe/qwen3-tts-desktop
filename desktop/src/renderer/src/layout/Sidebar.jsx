@@ -1,12 +1,11 @@
 import { useEffect } from 'react';
-import { HiHome, HiMicrophone, HiOutlineCog6Tooth } from 'react-icons/hi2';
+import { HiMicrophone, HiOutlineCog6Tooth } from 'react-icons/hi2';
 import { RiFileMusicLine, RiVoiceprintLine } from 'react-icons/ri';
 import { NavLink } from 'react-router-dom';
 import { track } from '../api/telemetry';
 import { APP_ROUTE_ITEMS } from '../routes/config';
 
 const ICONS = {
-  '/': HiHome,
   '/voice-generate': HiMicrophone,
   '/voice-clone': RiVoiceprintLine,
   '/audio-files': RiFileMusicLine,
@@ -22,7 +21,9 @@ export default function Sidebar() {
     <aside className="w-[208px] flex-none border-r border-border bg-canvas">
       <div className="flex flex-col gap-0.5 border-b border-border px-4 py-4 text-[13px] font-semibold text-text">
         <span>QWEN TTS</span>
-        <small className="text-[11px] font-medium text-text-subtle">Desktop</small>
+        <small className="text-[11px] font-medium text-text-subtle">
+          Desktop
+        </small>
       </div>
       <nav className="grid gap-1.5 p-3">
         {APP_ROUTE_ITEMS.map(({ path, label, end }) => {

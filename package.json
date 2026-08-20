@@ -4,6 +4,10 @@
   "scripts": {
     "dev": "pnpm --dir desktop dev",
     "build": "pnpm --dir desktop build",
+    "engine:build": "pnpm --dir desktop engine:build",
+    "engine:verify": "pnpm --dir desktop engine:verify",
+    "package:win": "pnpm --dir desktop package:win",
+    "package:win:dir": "pnpm --dir desktop package:win:dir",
     "preview": "pnpm --dir desktop preview",
     "lint": "pnpm --dir desktop lint",
     "format": "pnpm --dir desktop format"

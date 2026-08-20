@@ -10,16 +10,16 @@ export default function EngineBootstrap() {
   useEffect(() => {
     track('component_used', { component: 'engine_bootstrap' }, { once: true });
     track('engine_bootstrap_started', {}, { once: true });
-    useEngineStore.getState().initialize();
     const unsubscribeStatus = onEngineStatus((status) => {
       useEngineStore.getState().setStatus(status);
       if (status === 'ready') {
         track('engine_ready', {}, { once: true });
-        useEngineStore.getState().initialize();
+        void useEngineStore.getState().initialize();
       } else if (status === 'unavailable') {
         track('engine_unavailable', {}, { once: true });
       }
     });
+    void useEngineStore.getState().initialize();
     const unsubscribeJob = onJobUpdated(useJobStore.getState().update);
     const unsubscribeArtifact = onArtifactCreated((artifact) => {
       useArtifactStore.getState().add(artifact);

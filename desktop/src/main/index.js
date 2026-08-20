@@ -38,7 +38,7 @@ if (!app.requestSingleInstanceLock()) {
     mainWindow.focus();
   });
 
-  app.whenReady().then(async () => {
+  app.whenReady().then(() => {
     if (quitRequested) {
       return;
     }
@@ -46,16 +46,12 @@ if (!app.requestSingleInstanceLock()) {
     registerHandlers(engine, logger);
     registerEngineEvents(engine, logger, () => mainWindow);
     mainWindow = createWindow();
-    try {
-      await engine.start();
-    } catch (error) {
+    void engine.start().catch((error) => {
       if (!quitRequested) {
         logger.error('app', `engine startup failed: ${error.message}`);
       }
-    }
-    if (quitRequested) {
-      return;
-    }
+    });
+
     app.on('activate', () => {
       if (!mainWindow || mainWindow.isDestroyed()) {
         mainWindow = createWindow();

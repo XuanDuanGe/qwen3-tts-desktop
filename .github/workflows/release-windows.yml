@@ -1,0 +1,101 @@
+name: Release Windows setup
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONUTF8: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14.6'
+          architecture: x64
+
+      - name: Enable pnpm
+        run: corepack enable; corepack prepare pnpm@11.15.1 --activate
+
+      - name: Validate release version
+        id: version
+        run: |
+          $version = node -p "require('./desktop/package.json').version"
+          if ('${{ github.ref_type }}' -eq 'tag' -and '${{ github.ref_name }}' -ne "v$version") {
+            throw "Git tag '${{ github.ref_name }}' must match desktop/package.json version 'v$version'."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Install Electron dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install locked Python sidecar dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r core/requirements-release.txt
+          python -m pip install --no-deps -e core
+
+      - name: Build and verify Python sidecar
+        run: |
+          pnpm --dir desktop engine:build:ci
+          pnpm --dir desktop engine:verify
+
+      - name: Lint desktop
+        run: pnpm --dir desktop lint
+
+      - name: Build Windows setup
+        run: pnpm --dir desktop package:win:electron
+
+      - name: Create SHA-256 checksum
+        id: artifact
+        run: |
+          $setup = Get-ChildItem desktop/release/*-win-x64-setup.exe | Select-Object -First 1
+          if ($null -eq $setup) { throw 'Windows setup executable was not created.' }
+          $checksum = "$($setup.FullName).sha256"
+          $hash = (Get-FileHash $setup.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash *$($setup.Name)" | Set-Content -NoNewline $checksum
+          "setup=$($setup.FullName)" >> $env:GITHUB_OUTPUT
+          "setup_name=$($setup.Name)" >> $env:GITHUB_OUTPUT
+          "checksum=$checksum" >> $env:GITHUB_OUTPUT
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Qwen3-TTS-Desktop-${{ steps.version.outputs.version }}-win-x64
+          path: |
+            ${{ steps.artifact.outputs.setup }}
+            ${{ steps.artifact.outputs.checksum }}
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            ${{ steps.artifact.outputs.setup }}
+            ${{ steps.artifact.outputs.checksum }}

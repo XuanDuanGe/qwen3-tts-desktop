@@ -1,84 +1,59 @@
-import { app, BrowserWindow, ipcMain } from "electron";
-import { constants, mkdirSync, appendFileSync } from "node:fs";
-import { join, basename } from "node:path";
-import { access, writeFile, readFile, unlink, mkdir, copyFile, readdir, stat } from "node:fs/promises";
-import { spawn, execFile } from "node:child_process";
-import { EventEmitter } from "node:events";
-const workspaceRoot = join(app.getAppPath(), "..");
-function getEnginePaths() {
-  if (app.isPackaged) {
-    return {
-      command: join(process.resourcesPath, "engine", "qwen-tts-engine.exe"),
-      args: [],
-      cwd: process.resourcesPath,
-      appData: app.getPath("userData"),
-      cache: app.getPath("cache"),
-      packaged: true
-    };
-  }
-  return {
-    command: join(workspaceRoot, ".venv", "Scripts", "python.exe"),
+import { app as f, BrowserWindow as z, ipcMain as l } from "electron";
+import { constants as I, mkdirSync as T, appendFileSync as B } from "node:fs";
+import { join as h, basename as Z } from "node:path";
+import { access as A, writeFile as ee, readFile as M, unlink as F, mkdir as V, copyFile as te, readdir as re, stat as j } from "node:fs/promises";
+import { spawn as ne, execFile as ie } from "node:child_process";
+import { EventEmitter as se } from "node:events";
+const D = h(f.getAppPath(), "..");
+function N() {
+  return f.isPackaged ? {
+    command: h(process.resourcesPath, "engine", "qwen-tts-engine.exe"),
+    args: [],
+    cwd: process.resourcesPath,
+    appData: f.getPath("userData"),
+    cache: f.getPath("cache"),
+    packaged: !0
+  } : {
+    command: h(D, ".venv", "Scripts", "python.exe"),
     args: ["-m", "qwen_tts_engine", "--device", "cpu", "--dtype", "float32"],
-    cwd: join(workspaceRoot, "core"),
-    appData: join(workspaceRoot, ".local", "app-data"),
-    cache: join(workspaceRoot, ".local", "cache"),
-    packaged: false
+    cwd: h(D, "core"),
+    appData: h(D, ".local", "app-data"),
+    cache: h(D, ".local", "cache"),
+    packaged: !1
   };
 }
-const PROTOCOL_VERSION = 1;
-function createRequest(requestId, method, params = {}) {
+const C = 1;
+function oe(t, e, r = {}) {
   return {
-    protocolVersion: PROTOCOL_VERSION,
+    protocolVersion: C,
     type: "request",
-    requestId,
-    method,
-    params
+    requestId: t,
+    method: e,
+    params: r
   };
 }
-function parseMessage(line) {
-  const message = JSON.parse(line);
-  if (message.protocolVersion !== PROTOCOL_VERSION || typeof message.type !== "string") {
+function ae(t) {
+  const e = JSON.parse(t);
+  if (e.protocolVersion !== C || typeof e.type != "string")
     throw new Error("Invalid engine protocol message");
-  }
-  if (message.type === "response" && typeof message.requestId !== "string") {
+  if (e.type === "response" && typeof e.requestId != "string")
     throw new Error("Invalid engine response");
-  }
-  if (message.type === "event" && typeof message.event !== "string") {
+  if (e.type === "event" && typeof e.event != "string")
     throw new Error("Invalid engine event");
-  }
-  return message;
+  return e;
 }
-const REQUEST_TIMEOUT = 3e4;
-const STARTUP_REQUEST_TIMEOUT = 12e4;
-const MODEL_INSTALL_TIMEOUT = 30 * 60 * 1e3;
-const SHUTDOWN_TIMEOUT = 6e3;
-const EXIT_TIMEOUT = 2e3;
-const STARTUP_EXIT_TIMEOUT = 15e3;
-class EngineManager extends EventEmitter {
-  constructor(logger) {
-    super();
-    this.logger = logger;
-    this.child = null;
-    this.pending = /* @__PURE__ */ new Map();
-    this.sequence = 0;
-    this.status = "stopped";
-    this.buffer = "";
-    this.stopping = false;
-    this.ready = false;
-    this.stopRequested = false;
-    this.startPromise = null;
-    this.stopPromise = null;
+const L = 3e4, U = 12e4, ce = 30 * 60 * 1e3, de = 6e3, P = 2e3, W = 15e3;
+class ue extends se {
+  constructor(e) {
+    super(), this.logger = e, this.child = null, this.pending = /* @__PURE__ */ new Map(), this.sequence = 0, this.status = "stopped", this.buffer = "", this.stopping = !1, this.ready = !1, this.stopRequested = !1, this.startPromise = null, this.stopPromise = null;
   }
   async start() {
-    if (this.stopping || this.stopRequested) {
+    if (this.stopping || this.stopRequested)
       throw new Error("Engine is stopping");
-    }
-    if (this.child) {
+    if (this.child)
       return this.status;
-    }
-    if (this.startPromise) {
+    if (this.startPromise)
       return this.startPromise;
-    }
     this.startPromise = this.startEngine();
     try {
       return await this.startPromise;
@@ -87,623 +62,431 @@ class EngineManager extends EventEmitter {
     }
   }
   async startEngine() {
-    var _a, _b, _c, _d, _e;
-    const paths = getEnginePaths();
-    (_a = this.logger) == null ? void 0 : _a.info("engine", `starting engine (${paths.packaged ? "packaged" : "development"})`);
-    if (!paths.packaged) {
+    var i, s, a, o, d;
+    const e = N();
+    if ((i = this.logger) == null || i.info("engine", `starting engine (${e.packaged ? "packaged" : "development"})`), !e.packaged)
       try {
-        await access(paths.command, constants.X_OK);
+        await A(e.command, I.X_OK);
       } catch {
-        const error = new Error(
-          `Python engine environment is missing: ${paths.command}. From the repository root, run: python -m venv .venv && .venv/Scripts/python.exe -m pip install -e core`
+        const c = new Error(
+          `Python engine environment is missing: ${e.command}. From the repository root, run: python -m venv .venv && .venv/Scripts/python.exe -m pip install -e core`
         );
-        (_b = this.logger) == null ? void 0 : _b.error("engine", error.message);
-        this.emit("status", this.status, error);
-        this.emit("stderr", `${error.message}
-`);
-        throw error;
+        throw (s = this.logger) == null || s.error("engine", c.message), this.emit("status", this.status, c), this.emit("stderr", `${c.message}
+`), c;
       }
-    }
-    const args = [
-      ...paths.args,
+    const r = [
+      ...e.args,
       "--app-data-dir",
-      paths.appData,
+      e.appData,
       "--cache-dir",
-      paths.cache
+      e.cache
     ];
-    this.status = "starting";
-    this.emit("status", this.status);
-    if (this.stopRequested) {
+    if (this.status = "starting", this.emit("status", this.status), this.stopRequested)
       throw new Error("Engine shutdown requested");
-    }
-    const child = spawn(paths.command, args, {
-      cwd: paths.cwd,
+    const n = ne(e.command, r, {
+      cwd: e.cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      windowsHide: true
+      windowsHide: !0
     });
-    this.child = child;
-    (_c = this.logger) == null ? void 0 : _c.info("engine", `sidecar started pid=${child.pid}`);
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => this.handleStdout(chunk));
-    child.stderr.on("data", (chunk) => {
-      if (!this.stopRequested) {
-        this.emit("stderr", chunk);
-      }
-    });
-    child.once("error", (error) => {
-      if (!this.stopRequested) {
-        this.emit(
-          "stderr",
-          `Failed to start engine (${paths.command}, cwd: ${paths.cwd}): ${error.message}
+    this.child = n, (a = this.logger) == null || a.info("engine", `sidecar started pid=${n.pid}`), n.stdout.setEncoding("utf8"), n.stderr.setEncoding("utf8"), n.stdout.on("data", (c) => this.handleStdout(c)), n.stderr.on("data", (c) => {
+      this.stopRequested || this.emit("stderr", c);
+    }), n.once("error", (c) => {
+      this.stopRequested || this.emit(
+        "stderr",
+        `Failed to start engine (${e.command}, cwd: ${e.cwd}): ${c.message}
 `
-        );
-      }
-      this.handleExit(child, error);
-    });
-    child.once("exit", (code, signal) => {
+      ), this.handleExit(n, c);
+    }), n.once("exit", (c, u) => {
       this.handleExit(
-        child,
+        n,
         new Error(
-          `Engine exited with code ${code ?? "unknown"}${signal ? ` (${signal})` : ""}`
+          `Engine exited with code ${c ?? "unknown"}${u ? ` (${u})` : ""}`
         )
       );
     });
     try {
-      await this.request("engine.hello", {}, STARTUP_REQUEST_TIMEOUT);
-      await this.request("engine.health", {}, STARTUP_REQUEST_TIMEOUT);
-      if (this.stopRequested) {
+      if (await this.request("engine.hello", {}, U), await this.request("engine.health", {}, U), this.stopRequested)
         throw new Error("Engine shutdown requested");
-      }
-      this.ready = true;
-      this.status = "ready";
-      (_d = this.logger) == null ? void 0 : _d.info("engine", "engine ready");
-      this.emit("status", this.status);
-      return this.status;
-    } catch (error) {
-      if (this.stopRequested) {
-        throw error;
-      }
-      await this.forceStop(child);
-      if (!await this.waitForExit(child, STARTUP_EXIT_TIMEOUT)) {
-        await this.forceStop(child, true);
-        await this.waitForExit(child, EXIT_TIMEOUT);
-      }
-      this.status = "unavailable";
-      (_e = this.logger) == null ? void 0 : _e.error("engine", `startup failed: ${error.message}`);
-      this.emit("status", this.status, error);
-      throw error;
+      return this.ready = !0, this.status = "ready", (o = this.logger) == null || o.info("engine", "engine ready"), this.emit("status", this.status), this.status;
+    } catch (c) {
+      throw this.stopRequested || (await this.forceStop(n), await this.waitForExit(n, W) || (await this.forceStop(n, !0), await this.waitForExit(n, P)), this.status = "unavailable", (d = this.logger) == null || d.error("engine", `startup failed: ${c.message}`), this.emit("status", this.status, c)), c;
     }
   }
-  request(method, params = {}, timeout = REQUEST_TIMEOUT) {
-    var _a, _b, _c;
-    if ((this.stopping || this.stopRequested) && method !== "engine.shutdown") {
+  request(e, r = {}, n = L) {
+    var o, d, c;
+    if ((this.stopping || this.stopRequested) && e !== "engine.shutdown")
       return Promise.reject(new Error("Engine is stopping"));
-    }
-    if (!((_b = (_a = this.child) == null ? void 0 : _a.stdin) == null ? void 0 : _b.writable)) {
+    if (!((d = (o = this.child) == null ? void 0 : o.stdin) != null && d.writable))
       return Promise.reject(new Error("Engine is not running"));
-    }
-    if (method === "models.install" && timeout === REQUEST_TIMEOUT) {
-      timeout = MODEL_INSTALL_TIMEOUT;
-    }
-    const requestId = `req-${++this.sequence}`;
-    const message = `${JSON.stringify(createRequest(requestId, method, params))}
-`;
-    const startedAt = Date.now();
-    (_c = this.logger) == null ? void 0 : _c.debug("engine", `request ${method} started`);
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        var _a2;
-        this.pending.delete(requestId);
-        const phase = method === "engine.hello" || method === "engine.health" ? "startup handshake" : "request";
-        (_a2 = this.logger) == null ? void 0 : _a2.error(
+    e === "models.install" && n === L && (n = ce);
+    const i = `req-${++this.sequence}`, s = `${JSON.stringify(oe(i, e, r))}
+`, a = Date.now();
+    return (c = this.logger) == null || c.debug("engine", `request ${e} started`), new Promise((u, p) => {
+      const w = setTimeout(() => {
+        var $;
+        this.pending.delete(i);
+        const E = e === "engine.hello" || e === "engine.health" ? "startup handshake" : "request";
+        ($ = this.logger) == null || $.error(
           "engine",
-          `${phase} ${method} timed out after ${timeout}ms`
-        );
-        reject(new Error(`Engine request timed out: ${method}`));
-      }, timeout);
-      this.pending.set(requestId, {
-        resolve,
-        reject,
-        timer,
-        method,
-        startedAt
-      });
-      this.child.stdin.write(message, "utf8", (error) => {
-        var _a2;
-        if (error) {
-          clearTimeout(timer);
-          this.pending.delete(requestId);
-          (_a2 = this.logger) == null ? void 0 : _a2.error("engine", `request ${method} write failed: ${error.message}`);
-          reject(error);
-        }
+          `${E} ${e} timed out after ${n}ms`
+        ), p(new Error(`Engine request timed out: ${e}`));
+      }, n);
+      this.pending.set(i, {
+        resolve: u,
+        reject: p,
+        timer: w,
+        method: e,
+        startedAt: a
+      }), this.child.stdin.write(s, "utf8", (E) => {
+        var $;
+        E && (clearTimeout(w), this.pending.delete(i), ($ = this.logger) == null || $.error("engine", `request ${e} write failed: ${E.message}`), p(E));
       });
     });
   }
   stop() {
-    this.stopRequested = true;
-    if (!this.stopPromise) {
-      this.stopPromise = this.stopEngine();
-    }
-    return this.stopPromise;
+    return this.stopRequested = !0, this.stopPromise || (this.stopPromise = this.stopEngine()), this.stopPromise;
   }
   async stopEngine() {
-    var _a, _b, _c;
-    const child = this.child;
-    if (!child) {
-      this.ready = false;
-      this.status = "stopped";
+    var i, s, a;
+    const e = this.child;
+    if (!e) {
+      this.ready = !1, this.status = "stopped";
       return;
     }
-    this.stopping = true;
-    const wasReady = this.ready;
-    if (!wasReady) {
-      this.closeStdin(child);
-    } else {
+    this.stopping = !0;
+    const r = this.ready;
+    if (!r)
+      this.closeStdin(e);
+    else
       try {
-        await this.request("engine.shutdown", {}, SHUTDOWN_TIMEOUT);
-      } catch (error) {
-        if (this.child === child) {
-          (_a = this.logger) == null ? void 0 : _a.warn("engine", `graceful shutdown failed: ${error.message}`);
-        }
+        await this.request("engine.shutdown", {}, de);
+      } catch (o) {
+        this.child === e && ((i = this.logger) == null || i.warn("engine", `graceful shutdown failed: ${o.message}`));
       }
-    }
-    const exitTimeout = wasReady ? EXIT_TIMEOUT : STARTUP_EXIT_TIMEOUT;
-    if (!await this.waitForExit(child, exitTimeout)) {
-      (_b = this.logger) == null ? void 0 : _b.warn("engine", `sidecar did not exit gracefully pid=${child.pid}`);
-      await this.forceStop(child);
-      if (!await this.waitForExit(child, EXIT_TIMEOUT)) {
-        await this.forceStop(child, true);
-        if (!await this.waitForExit(child, EXIT_TIMEOUT)) {
-          (_c = this.logger) == null ? void 0 : _c.error("engine", `sidecar did not exit after forced stop pid=${child.pid}`);
-        }
-      }
-    }
-    this.status = "stopped";
-    this.emit("status", this.status);
+    const n = r ? P : W;
+    await this.waitForExit(e, n) || ((s = this.logger) == null || s.warn("engine", `sidecar did not exit gracefully pid=${e.pid}`), await this.forceStop(e), await this.waitForExit(e, P) || (await this.forceStop(e, !0), await this.waitForExit(e, P) || (a = this.logger) == null || a.error("engine", `sidecar did not exit after forced stop pid=${e.pid}`))), this.status = "stopped", this.emit("status", this.status);
   }
-  handleStdout(chunk) {
-    var _a, _b, _c, _d, _e, _f;
-    this.buffer += chunk;
-    const lines = this.buffer.split(/\r?\n/);
-    this.buffer = lines.pop();
-    for (const line of lines) {
-      if (!line.trim()) {
-        continue;
-      }
-      try {
-        const message = parseMessage(line);
-        if (message.type === "event") {
-          this.emit("event", message);
-          continue;
-        }
-        const pending = this.pending.get(message.requestId);
-        if (!pending) {
-          continue;
-        }
-        this.pending.delete(message.requestId);
-        clearTimeout(pending.timer);
-        if (message.ok) {
-          (_a = this.logger) == null ? void 0 : _a.debug(
-            "engine",
-            `request ${pending.method} succeeded in ${Date.now() - pending.startedAt}ms`
-          );
-          pending.resolve(message.result);
-        } else {
-          const error = new Error(
-            ((_b = message.error) == null ? void 0 : _b.message) || "Engine request failed"
-          );
-          error.code = (_c = message.error) == null ? void 0 : _c.code;
-          error.details = (_d = message.error) == null ? void 0 : _d.details;
-          (_e = this.logger) == null ? void 0 : _e.error(
-            "engine",
-            `request ${pending.method} failed (${error.code || "unknown"}) in ${Date.now() - pending.startedAt}ms`
-          );
-          pending.reject(error);
-        }
-      } catch (error) {
-        (_f = this.logger) == null ? void 0 : _f.error("engine", `protocol parse failed: ${error.message}`);
-        this.emit("stderr", `${error.message}
+  handleStdout(e) {
+    var n, i, s, a, o, d;
+    this.buffer += e;
+    const r = this.buffer.split(/\r?\n/);
+    this.buffer = r.pop();
+    for (const c of r)
+      if (c.trim())
+        try {
+          const u = ae(c);
+          if (u.type === "event") {
+            this.emit("event", u);
+            continue;
+          }
+          const p = this.pending.get(u.requestId);
+          if (!p)
+            continue;
+          if (this.pending.delete(u.requestId), clearTimeout(p.timer), u.ok)
+            (n = this.logger) == null || n.debug(
+              "engine",
+              `request ${p.method} succeeded in ${Date.now() - p.startedAt}ms`
+            ), p.resolve(u.result);
+          else {
+            const w = new Error(
+              ((i = u.error) == null ? void 0 : i.message) || "Engine request failed"
+            );
+            w.code = (s = u.error) == null ? void 0 : s.code, w.details = (a = u.error) == null ? void 0 : a.details, (o = this.logger) == null || o.error(
+              "engine",
+              `request ${p.method} failed (${w.code || "unknown"}) in ${Date.now() - p.startedAt}ms`
+            ), p.reject(w);
+          }
+        } catch (u) {
+          (d = this.logger) == null || d.error("engine", `protocol parse failed: ${u.message}`), this.emit("stderr", `${u.message}
 `);
-      }
+        }
+  }
+  handleExit(e, r) {
+    var n;
+    if (this.child === e) {
+      this.child = null, this.ready = !1;
+      for (const i of this.pending.values())
+        clearTimeout(i.timer), i.reject(r);
+      this.pending.clear(), this.stopping || (this.status = "unavailable", (n = this.logger) == null || n.error("engine", `sidecar exited: ${r.message}`), this.emit("status", this.status, r));
     }
   }
-  handleExit(child, error) {
-    var _a;
-    if (this.child !== child) {
-      return;
-    }
-    this.child = null;
-    this.ready = false;
-    for (const pending of this.pending.values()) {
-      clearTimeout(pending.timer);
-      pending.reject(error);
-    }
-    this.pending.clear();
-    if (!this.stopping) {
-      this.status = "unavailable";
-      (_a = this.logger) == null ? void 0 : _a.error("engine", `sidecar exited: ${error.message}`);
-      this.emit("status", this.status, error);
-    }
+  closeStdin(e) {
+    e.stdin && !e.stdin.destroyed && !e.stdin.writableEnded && e.stdin.end();
   }
-  closeStdin(child) {
-    if (child.stdin && !child.stdin.destroyed && !child.stdin.writableEnded) {
-      child.stdin.end();
-    }
-  }
-  waitForExit(child, timeout) {
-    if (this.child !== child) {
-      return Promise.resolve(true);
-    }
-    return new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        child.removeListener("exit", onExit);
-        resolve(this.child !== child);
-      }, timeout);
-      const onExit = () => {
-        clearTimeout(timer);
-        resolve(true);
+  waitForExit(e, r) {
+    return this.child !== e ? Promise.resolve(!0) : new Promise((n) => {
+      const i = setTimeout(() => {
+        e.removeListener("exit", s), n(this.child !== e);
+      }, r), s = () => {
+        clearTimeout(i), n(!0);
       };
-      child.once("exit", onExit);
+      e.once("exit", s);
     });
   }
-  async forceStop(child, force = false) {
-    if (this.child !== child || !child.pid) {
-      return;
-    }
-    if (process.platform === "win32") {
-      await new Promise((resolve) => {
-        execFile(
-          "taskkill",
-          ["/PID", String(child.pid), "/T", "/F"],
-          { windowsHide: true },
-          (error) => {
-            var _a;
-            if (error) {
-              (_a = this.logger) == null ? void 0 : _a.warn("engine", `taskkill failed: ${error.message}`);
+  async forceStop(e, r = !1) {
+    if (!(this.child !== e || !e.pid)) {
+      if (process.platform === "win32") {
+        await new Promise((n) => {
+          ie(
+            "taskkill",
+            ["/PID", String(e.pid), "/T", "/F"],
+            { windowsHide: !0 },
+            (i) => {
+              var s;
+              i && ((s = this.logger) == null || s.warn("engine", `taskkill failed: ${i.message}`)), n();
             }
-            resolve();
-          }
-        );
-      });
-      return;
-    }
-    if (!child.killed) {
-      child.kill(force ? "SIGKILL" : "SIGTERM");
+          );
+        });
+        return;
+      }
+      e.killed || e.kill(r ? "SIGKILL" : "SIGTERM");
     }
   }
 }
-function registerEngineEvents(engine, logger, getWindow2) {
-  function send(channel, payload) {
-    const window = getWindow2();
-    if (!window || window.isDestroyed() || window.webContents.isDestroyed()) {
-      return;
-    }
-    try {
-      window.webContents.send(channel, payload);
-    } catch {
-    }
+function le(t, e, r) {
+  function n(i, s) {
+    const a = r();
+    if (!(!a || a.isDestroyed() || a.webContents.isDestroyed()))
+      try {
+        a.webContents.send(i, s);
+      } catch {
+      }
   }
-  engine.on("status", (status) => {
-    send("engine:status-changed", status);
-  });
-  engine.on("event", (message) => {
-    logger.debug("engine", `event ${message.event}`);
-    const channel = {
+  t.on("status", (i) => {
+    n("engine:status-changed", i);
+  }), t.on("event", (i) => {
+    e.debug("engine", `event ${i.event}`);
+    const s = {
       "job.updated": "engine:job-updated",
       "artifact.created": "engine:artifact-created"
-    }[message.event];
-    if (!channel) {
-      return;
-    }
-    if (message.event === "artifact.created") {
-      logger.info("artifact", "artifact created received; forwarding to renderer");
-    }
-    send(channel, message.payload);
-    if (message.event === "artifact.created") {
-      logger.info("artifact", "artifact forwarded to renderer for preview");
-    }
-  });
-  engine.on("stderr", (message) => {
-    for (const line of message.split(/\r?\n/)) {
-      if (line.trim()) logger.warn("python", line.trim());
-    }
+    }[i.event];
+    s && (i.event === "artifact.created" && e.info("artifact", "artifact created received; forwarding to renderer"), n(s, i.payload), i.event === "artifact.created" && e.info("artifact", "artifact forwarded to renderer for preview"));
+  }), t.on("stderr", (i) => {
+    for (const s of i.split(/\r?\n/))
+      s.trim() && e.warn("python", s.trim());
   });
 }
-function getWindow(event) {
-  return BrowserWindow.fromWebContents(event.sender);
+function v(t) {
+  return z.fromWebContents(t.sender);
 }
-function validateSender(event) {
-  const window = getWindow(event);
-  if (!window || window.isDestroyed()) {
+function m(t) {
+  const e = v(t);
+  if (!e || e.isDestroyed())
     throw new Error("Invalid renderer window");
-  }
-  return window;
+  return e;
 }
-function getManager(event, manager) {
-  validateSender(event);
-  return manager;
+function g(t, e) {
+  return m(t), e;
 }
-function requireString(value, name) {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${name} must be a non-empty string`);
-  }
-  return value.trim();
+function S(t, e) {
+  if (typeof t != "string" || !t.trim())
+    throw new Error(`${e} must be a non-empty string`);
+  return t.trim();
 }
-function requireArtifactId(value) {
-  const artifactId = requireString(value, "artifactId");
-  if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(artifactId)) {
+function q(t) {
+  const e = S(t, "artifactId");
+  if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(e))
     throw new Error("artifactId must be a UUID");
-  }
-  return artifactId;
+  return e;
 }
-function requireObject(value, name) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${name} must be an object`);
-  }
-  return value;
+function O(t, e) {
+  if (!t || typeof t != "object" || Array.isArray(t))
+    throw new Error(`${e} must be an object`);
+  return t;
 }
-function getDefaultSettings() {
+function J() {
   return {
     modelDownloadProxy: "http://127.0.0.1:7897",
-    audioDownloadDir: join(app.getPath("music"), "qwen3-tts-downloads")
+    audioDownloadDir: h(f.getPath("music"), "qwen3-tts-downloads")
   };
 }
-function getConfigPath() {
-  return join(app.getPath("userData"), "config.json");
+function Y() {
+  return h(f.getPath("userData"), "config.json");
 }
-async function readSettings() {
+async function G() {
   try {
-    const raw = await readFile(getConfigPath(), "utf8");
-    return normalizeSettings(JSON.parse(raw));
+    const t = await M(Y(), "utf8");
+    return K(JSON.parse(t));
   } catch {
-    return getDefaultSettings();
+    return J();
   }
 }
-function normalizeSettings(value) {
-  const defaults = getDefaultSettings();
-  const source = value && typeof value === "object" ? value : {};
-  const modelDownloadProxy = typeof source.modelDownloadProxy === "string" ? source.modelDownloadProxy.trim() : defaults.modelDownloadProxy;
-  const audioDownloadDir = typeof source.audioDownloadDir === "string" && source.audioDownloadDir.trim() ? source.audioDownloadDir.trim() : defaults.audioDownloadDir;
+function K(t) {
+  const e = J(), r = t && typeof t == "object" ? t : {}, n = typeof r.modelDownloadProxy == "string" ? r.modelDownloadProxy.trim() : e.modelDownloadProxy, i = typeof r.audioDownloadDir == "string" && r.audioDownloadDir.trim() ? r.audioDownloadDir.trim() : e.audioDownloadDir;
   return {
-    modelDownloadProxy,
-    audioDownloadDir
+    modelDownloadProxy: n,
+    audioDownloadDir: i
   };
 }
-function registerSettingsHandlers() {
-  ipcMain.handle("settings:get", async (event) => {
-    validateSender(event);
-    return readSettings();
-  });
-  ipcMain.handle("settings:save", async (event, settings) => {
-    validateSender(event);
-    const nextSettings = normalizeSettings(requireObject(settings, "settings"));
-    await writeFile(
-      getConfigPath(),
-      `${JSON.stringify(nextSettings, null, 2)}
+function fe() {
+  l.handle("settings:get", async (t) => (m(t), G())), l.handle("settings:save", async (t, e) => {
+    m(t);
+    const r = K(O(e, "settings"));
+    return await ee(
+      Y(),
+      `${JSON.stringify(r, null, 2)}
 `,
       "utf8"
-    );
-    return nextSettings;
+    ), r;
   });
 }
-function pad(value) {
-  return String(value).padStart(2, "0");
+function b(t) {
+  return String(t).padStart(2, "0");
 }
-function formatDownloadFileName(date = /* @__PURE__ */ new Date()) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
-    date.getDate()
-  )}-${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}.wav`;
+function he(t = /* @__PURE__ */ new Date()) {
+  return `${t.getFullYear()}-${b(t.getMonth() + 1)}-${b(
+    t.getDate()
+  )}-${b(t.getHours())}-${b(t.getMinutes())}-${b(t.getSeconds())}.wav`;
 }
-function getOutputsDir() {
-  return join(getEnginePaths().appData, "outputs");
+function x() {
+  return h(N().appData, "outputs");
 }
-function getArtifactJsonPath(artifactId) {
-  return join(getOutputsDir(), `${artifactId}.json`);
+function Q(t) {
+  return h(x(), `${t}.json`);
 }
-function getArtifactAudioPath(fileName) {
-  return join(getOutputsDir(), fileName);
+function y(t) {
+  return h(x(), t);
 }
-async function readJson(path) {
+async function pe(t) {
   try {
-    return JSON.parse(await readFile(path, "utf8"));
+    return JSON.parse(await M(t, "utf8"));
   } catch {
     return null;
   }
 }
-async function buildRecord(artifactId, fileName, meta, fileStat) {
+async function k(t, e, r, n) {
   return {
-    artifactId,
-    fileName,
-    mimeType: typeof (meta == null ? void 0 : meta.mimeType) === "string" ? meta.mimeType : "audio/wav",
-    sampleRate: typeof (meta == null ? void 0 : meta.sampleRate) === "number" ? meta.sampleRate : void 0,
-    createdAt: typeof (meta == null ? void 0 : meta.createdAt) === "number" ? meta.createdAt : fileStat.mtimeMs
+    artifactId: t,
+    fileName: e,
+    mimeType: typeof (r == null ? void 0 : r.mimeType) == "string" ? r.mimeType : "audio/wav",
+    sampleRate: typeof (r == null ? void 0 : r.sampleRate) == "number" ? r.sampleRate : void 0,
+    createdAt: typeof (r == null ? void 0 : r.createdAt) == "number" ? r.createdAt : n.mtimeMs
   };
 }
-async function loadArtifactRecord(artifactId) {
-  const metaPath = getArtifactJsonPath(artifactId);
-  const meta = await readJson(metaPath);
-  if (meta) {
-    const configuredName = typeof meta.fileName === "string" && meta.fileName.trim() ? meta.fileName.trim() : `${artifactId}.wav`;
-    if (basename(configuredName) !== configuredName || !configuredName.endsWith(".wav")) {
+async function _(t) {
+  const e = Q(t), r = await pe(e);
+  if (r) {
+    const s = typeof r.fileName == "string" && r.fileName.trim() ? r.fileName.trim() : `${t}.wav`;
+    if (Z(s) !== s || !s.endsWith(".wav"))
       return null;
-    }
-    const fileName = configuredName;
-    const audioPath = getArtifactAudioPath(fileName);
+    const a = s, o = y(a);
     try {
-      await access(audioPath, constants.R_OK);
-      return buildRecord(
-        typeof meta.artifactId === "string" && meta.artifactId.trim() ? meta.artifactId.trim() : artifactId,
-        fileName,
-        meta,
-        await stat(audioPath)
+      return await A(o, I.R_OK), k(
+        typeof r.artifactId == "string" && r.artifactId.trim() ? r.artifactId.trim() : t,
+        a,
+        r,
+        await j(o)
       );
     } catch {
       return null;
     }
   }
-  const fallbackName = `${artifactId}.wav`;
-  const fallbackPath = getArtifactAudioPath(fallbackName);
+  const n = `${t}.wav`, i = y(n);
   try {
-    await access(fallbackPath, constants.R_OK);
-    return buildRecord(
-      artifactId,
-      fallbackName,
+    return await A(i, I.R_OK), k(
+      t,
+      n,
       null,
-      await stat(fallbackPath)
+      await j(i)
     );
   } catch {
     return null;
   }
 }
-async function listArtifactRecords() {
-  await mkdir(getOutputsDir(), { recursive: true });
-  const entries = await readdir(getOutputsDir(), { withFileTypes: true });
-  const records = [];
-  const seenFiles = /* @__PURE__ */ new Set();
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(".json") || entry.name.endsWith(".tmp.json")) {
+async function ge() {
+  await V(x(), { recursive: !0 });
+  const t = await re(x(), { withFileTypes: !0 }), e = [], r = /* @__PURE__ */ new Set();
+  for (const n of t) {
+    if (!n.isFile() || !n.name.endsWith(".json") || n.name.endsWith(".tmp.json"))
       continue;
-    }
-    const artifactId = entry.name.replace(/\.json$/i, "");
-    if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(artifactId)) {
+    const i = n.name.replace(/\.json$/i, "");
+    if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(i))
       continue;
-    }
-    const record = await loadArtifactRecord(artifactId);
-    if (!record) {
-      continue;
-    }
-    records.push(record);
-    seenFiles.add(record.fileName);
+    const s = await _(i);
+    s && (e.push(s), r.add(s.fileName));
   }
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith(".wav") || entry.name.endsWith(".tmp.wav") || seenFiles.has(entry.name)) {
+  for (const n of t) {
+    if (!n.isFile() || !n.name.endsWith(".wav") || n.name.endsWith(".tmp.wav") || r.has(n.name))
       continue;
-    }
-    const filePath = getArtifactAudioPath(entry.name);
-    const fileStat = await stat(filePath);
-    records.push(
-      await buildRecord(
-        entry.name.replace(/\.wav$/i, ""),
-        entry.name,
+    const i = y(n.name), s = await j(i);
+    e.push(
+      await k(
+        n.name.replace(/\.wav$/i, ""),
+        n.name,
         null,
-        fileStat
+        s
       )
     );
   }
-  records.sort((left, right) => (right.createdAt || 0) - (left.createdAt || 0));
-  return records;
+  return e.sort((n, i) => (i.createdAt || 0) - (n.createdAt || 0)), e;
 }
-function registerArtifactHandlers(manager) {
-  ipcMain.handle("artifacts:list", async (event) => {
-    validateSender(event);
-    return { artifacts: await listArtifactRecords() };
-  });
-  ipcMain.handle("artifacts:get", async (event, artifactId) => {
-    getManager(event, manager);
-    const record = await loadArtifactRecord(requireArtifactId(artifactId));
-    if (!record) {
+function we(t) {
+  l.handle("artifacts:list", async (e) => (m(e), { artifacts: await ge() })), l.handle("artifacts:get", async (e, r) => {
+    g(e, t);
+    const n = await _(q(r));
+    if (!n)
       throw new Error("Artifact not found");
-    }
-    return record;
-  });
-  ipcMain.handle("artifacts:delete", async (event, artifactId) => {
-    getManager(event, manager);
-    const normalizedArtifactId = requireArtifactId(artifactId);
-    const record = await loadArtifactRecord(normalizedArtifactId);
-    if (!record) {
+    return n;
+  }), l.handle("artifacts:delete", async (e, r) => {
+    g(e, t);
+    const n = q(r), i = await _(n);
+    if (!i)
       throw new Error("Artifact not found");
-    }
-    await Promise.all([
-      unlink(getArtifactAudioPath(record.fileName)).catch(() => void 0),
-      unlink(getArtifactJsonPath(normalizedArtifactId)).catch(() => void 0)
-    ]);
-    return { deleted: true };
-  });
-  ipcMain.handle("artifacts:read", async (event, artifactId) => {
-    validateSender(event);
-    const record = await loadArtifactRecord(requireArtifactId(artifactId));
-    if (!record) {
+    return await Promise.all([
+      F(y(i.fileName)).catch(() => {
+      }),
+      F(Q(n)).catch(() => {
+      })
+    ]), { deleted: !0 };
+  }), l.handle("artifacts:read", async (e, r) => {
+    m(e);
+    const n = await _(q(r));
+    if (!n)
       throw new Error("Artifact not found");
-    }
-    return readFile(getArtifactAudioPath(record.fileName));
-  });
-  ipcMain.handle("artifacts:download", async (event, artifactId) => {
-    validateSender(event);
-    const normalizedArtifactId = requireArtifactId(artifactId);
-    const record = await loadArtifactRecord(normalizedArtifactId);
-    if (!record) {
+    return M(y(n.fileName));
+  }), l.handle("artifacts:download", async (e, r) => {
+    m(e);
+    const n = q(r), i = await _(n);
+    if (!i)
       throw new Error("Artifact not found");
-    }
-    const settings = await readSettings();
-    const downloadDir = settings.audioDownloadDir;
-    const fileName = formatDownloadFileName();
-    const target = join(downloadDir, fileName);
-    await mkdir(downloadDir, { recursive: true });
-    await copyFile(getArtifactAudioPath(record.fileName), target);
-    return { fileName, target };
+    const a = (await G()).audioDownloadDir, o = he(), d = h(a, o);
+    return await V(a, { recursive: !0 }), await te(y(i.fileName), d), { fileName: o, target: d };
   });
 }
-function requireProxy(value) {
-  if (value == null || value === "") return void 0;
-  if (typeof value !== "string") {
+function me(t) {
+  if (t == null || t === "") return;
+  if (typeof t != "string")
     throw new Error("proxy must be a string");
-  }
-  let url;
+  let e;
   try {
-    url = new URL(value);
+    e = new URL(t);
   } catch {
     throw new Error("proxy must be a valid URL");
   }
-  if (!["http:", "https:"].includes(url.protocol) || !url.hostname || !url.port) {
+  if (!["http:", "https:"].includes(e.protocol) || !e.hostname || !e.port)
     throw new Error("proxy must use http://host:port or https://host:port");
-  }
-  return value;
+  return t;
 }
-function registerEngineHandlers(manager) {
-  ipcMain.handle("engine:status", (event) => {
-    getManager(event, manager);
-    return manager.status;
-  });
-  ipcMain.handle("models:list", (event) => {
-    getManager(event, manager);
-    return manager.request("models.list");
-  });
-  ipcMain.handle("models:capabilities", (event, modelId) => {
-    getManager(event, manager);
-    return manager.request("models.capabilities", {
-      modelId: requireString(modelId, "modelId")
+function ye(t) {
+  l.handle("engine:status", (e) => (g(e, t), t.status)), l.handle("models:list", (e) => (g(e, t), t.request("models.list"))), l.handle("models:capabilities", (e, r) => (g(e, t), t.request("models.capabilities", {
+    modelId: S(r, "modelId")
+  }))), l.handle("models:install", (e, r) => {
+    g(e, t);
+    const n = O(r, "params");
+    return t.request("models.install", {
+      modelId: S(n.modelId, "modelId"),
+      proxy: me(n.proxy)
     });
-  });
-  ipcMain.handle("models:install", (event, params) => {
-    getManager(event, manager);
-    const input = requireObject(params, "params");
-    return manager.request("models.install", {
-      modelId: requireString(input.modelId, "modelId"),
-      proxy: requireProxy(input.proxy)
-    });
-  });
-  ipcMain.handle("jobs:submit", (event, params) => {
-    getManager(event, manager);
-    return manager.request("jobs.submit", requireObject(params, "params"));
-  });
-  ipcMain.handle("jobs:get", (event, jobId) => {
-    getManager(event, manager);
-    return manager.request("jobs.get", {
-      jobId: requireString(jobId, "jobId")
-    });
-  });
-  ipcMain.handle("jobs:cancel", (event, jobId) => {
-    getManager(event, manager);
-    return manager.request("jobs.cancel", {
-      jobId: requireString(jobId, "jobId")
-    });
-  });
+  }), l.handle("jobs:submit", (e, r) => (g(e, t), t.request("jobs.submit", O(r, "params")))), l.handle("jobs:get", (e, r) => (g(e, t), t.request("jobs.get", {
+    jobId: S(r, "jobId")
+  }))), l.handle("jobs:cancel", (e, r) => (g(e, t), t.request("jobs.cancel", {
+    jobId: S(r, "jobId")
+  })));
 }
-function registerGreetHandler() {
-  ipcMain.handle("greet", (_, name) => `你好，${name}！`);
+function Ee() {
+  l.handle("greet", (t, e) => `你好，${e}！`);
 }
-const TELEMETRY_EVENTS = /* @__PURE__ */ new Set([
+const $e = /* @__PURE__ */ new Set([
   "app_started",
   "engine_bootstrap_started",
   "engine_ready",
@@ -716,15 +499,13 @@ const TELEMETRY_EVENTS = /* @__PURE__ */ new Set([
   "generation_failed",
   "artifact_downloaded",
   "artifact_preview_ready"
-]);
-const TELEMETRY_ROUTES = /* @__PURE__ */ new Set([
+]), be = /* @__PURE__ */ new Set([
   "home",
   "voice_generate",
   "voice_clone",
   "audio_files",
   "settings"
-]);
-const TELEMETRY_COMPONENTS = /* @__PURE__ */ new Set([
+]), ve = /* @__PURE__ */ new Set([
   "engine_bootstrap",
   "sidebar",
   "title_bar",
@@ -734,207 +515,129 @@ const TELEMETRY_COMPONENTS = /* @__PURE__ */ new Set([
   "audio_files_page",
   "settings_page"
 ]);
-function validateProperties(event, properties = {}) {
-  if (!properties || typeof properties !== "object" || Array.isArray(properties)) {
+function Se(t, e = {}) {
+  if (!e || typeof e != "object" || Array.isArray(e))
     throw new Error("telemetry properties must be an object");
-  }
-  const result = {};
-  for (const [key, value] of Object.entries(properties)) {
-    if (typeof key !== "string" || key.length > 32 || typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean" || typeof value === "string" && value.length > 80) {
+  const r = {};
+  for (const [n, i] of Object.entries(e)) {
+    if (typeof n != "string" || n.length > 32 || typeof i != "string" && typeof i != "number" && typeof i != "boolean" || typeof i == "string" && i.length > 80)
       throw new Error("invalid telemetry property");
-    }
-    result[key] = value;
+    r[n] = i;
   }
-  if (event === "page_view" && !TELEMETRY_ROUTES.has(result.route)) {
+  if (t === "page_view" && !be.has(r.route))
     throw new Error("invalid telemetry route");
-  }
-  if (event === "component_used" && !TELEMETRY_COMPONENTS.has(result.component)) {
+  if (t === "component_used" && !ve.has(r.component))
     throw new Error("invalid telemetry component");
-  }
-  return result;
+  return r;
 }
-function registerTelemetryHandler(logger) {
-  ipcMain.handle("telemetry:track", (event, name, properties) => {
-    if (typeof name !== "string" || !TELEMETRY_EVENTS.has(name)) {
+function _e(t) {
+  l.handle("telemetry:track", (e, r, n) => {
+    if (typeof r != "string" || !$e.has(r))
       throw new Error("invalid telemetry event");
-    }
-    const safeProperties = validateProperties(name, properties);
-    logger.info("telemetry", `${name} ${JSON.stringify(safeProperties)}`);
-    return { tracked: true };
+    const i = Se(r, n);
+    return t.info("telemetry", `${r} ${JSON.stringify(i)}`), { tracked: !0 };
   });
 }
-function registerWindowControlHandlers() {
-  ipcMain.handle("window:minimize", (event) => {
-    var _a;
-    (_a = getWindow(event)) == null ? void 0 : _a.minimize();
-  });
-  ipcMain.handle("window:toggle-maximize", (event) => {
-    const window = getWindow(event);
-    if (!window) {
-      return false;
-    }
-    if (window.isMaximized()) {
-      window.unmaximize();
-      return false;
-    }
-    window.maximize();
-    return true;
-  });
-  ipcMain.handle("window:close", (event) => {
-    var _a;
-    (_a = getWindow(event)) == null ? void 0 : _a.close();
-  });
-  ipcMain.handle("window:is-maximized", (event) => {
-    var _a;
-    return ((_a = getWindow(event)) == null ? void 0 : _a.isMaximized()) ?? false;
+function De() {
+  l.handle("window:minimize", (t) => {
+    var e;
+    (e = v(t)) == null || e.minimize();
+  }), l.handle("window:toggle-maximize", (t) => {
+    const e = v(t);
+    return e ? e.isMaximized() ? (e.unmaximize(), !1) : (e.maximize(), !0) : !1;
+  }), l.handle("window:close", (t) => {
+    var e;
+    (e = v(t)) == null || e.close();
+  }), l.handle("window:is-maximized", (t) => {
+    var e;
+    return ((e = v(t)) == null ? void 0 : e.isMaximized()) ?? !1;
   });
 }
-function registerHandlers(engine, logger) {
-  registerGreetHandler();
-  registerEngineHandlers(engine);
-  registerArtifactHandlers(engine);
-  registerSettingsHandlers();
-  registerWindowControlHandlers();
-  registerTelemetryHandler(logger);
+function Pe(t, e) {
+  Ee(), ye(t), we(t), fe(), De(), _e(e);
 }
-const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
-function timestamp(date = /* @__PURE__ */ new Date()) {
-  const pad2 = (value, size = 2) => String(value).padStart(size, "0");
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}-${pad2(date.getHours())}-${pad2(date.getMinutes())}-${pad2(date.getSeconds())}`;
+const R = { debug: 10, info: 20, warn: 30, error: 40 };
+function X(t = /* @__PURE__ */ new Date()) {
+  const e = (r, n = 2) => String(r).padStart(n, "0");
+  return `${t.getFullYear()}-${e(t.getMonth() + 1)}-${e(t.getDate())}-${e(t.getHours())}-${e(t.getMinutes())}-${e(t.getSeconds())}`;
 }
-function lineTimestamp(date = /* @__PURE__ */ new Date()) {
-  return `${timestamp(date)}.${String(date.getMilliseconds()).padStart(3, "0")}`;
+function qe(t = /* @__PURE__ */ new Date()) {
+  return `${X(t)}.${String(t.getMilliseconds()).padStart(3, "0")}`;
 }
-function createLogger(appData, level = process.env.QWEN_TTS_LOG_LEVEL || "info") {
-  const threshold = LEVELS[level] || LEVELS.info;
-  const logsDir = join(appData, "logs");
-  const filePath = join(logsDir, `${timestamp()}.log`);
-  let ready = false;
+function Te(t, e = process.env.QWEN_TTS_LOG_LEVEL || "info") {
+  const r = R[e] || R.info, n = h(t, "logs"), i = h(n, `${X()}.log`);
+  let s = !1;
   try {
-    mkdirSync(logsDir, { recursive: true });
-    ready = true;
-  } catch (error) {
-    console.error(`[logger] unable to create log directory: ${error.message}`);
+    T(n, { recursive: !0 }), s = !0;
+  } catch (o) {
+    console.error(`[logger] unable to create log directory: ${o.message}`);
   }
-  function write(name, module, message) {
-    if (LEVELS[name] < threshold) return;
-    const line = `${lineTimestamp()} [${name.toUpperCase()}] [${module}] ${message}`;
-    if (name === "error") console.error(line);
-    else if (name === "warn") console.warn(line);
-    else console.log(line);
-    if (ready) {
+  function a(o, d, c) {
+    if (R[o] < r) return;
+    const u = `${qe()} [${o.toUpperCase()}] [${d}] ${c}`;
+    if (o === "error" ? console.error(u) : o === "warn" ? console.warn(u) : console.log(u), s)
       try {
-        appendFileSync(filePath, `${line}
+        B(i, `${u}
 `, "utf8");
-      } catch (error) {
-        ready = false;
-        console.error(`[logger] unable to write log file: ${error.message}`);
+      } catch (p) {
+        s = !1, console.error(`[logger] unable to write log file: ${p.message}`);
       }
-    }
   }
   return {
-    filePath,
-    debug: (module, message) => write("debug", module, message),
-    info: (module, message) => write("info", module, message),
-    warn: (module, message) => write("warn", module, message),
-    error: (module, message) => write("error", module, message)
+    filePath: i,
+    debug: (o, d) => a("debug", o, d),
+    info: (o, d) => a("info", o, d),
+    warn: (o, d) => a("warn", o, d),
+    error: (o, d) => a("error", o, d)
   };
 }
-function createWindow() {
-  const window = new BrowserWindow({
+function H() {
+  const t = new z({
     title: "Qwen3 TTS Desktop",
     width: 1024,
     height: 768,
     minWidth: 800,
     minHeight: 600,
-    frame: false,
+    frame: !1,
+    show: !1,
     webPreferences: {
-      preload: join(import.meta.dirname, "index.mjs"),
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-      webSecurity: true
+      preload: h(import.meta.dirname, "index.mjs"),
+      nodeIntegration: !1,
+      contextIsolation: !0,
+      sandbox: !0,
+      webSecurity: !0
     }
   });
-  if (process.env.VITE_DEV_SERVER_URL) {
-    window.loadURL(process.env.VITE_DEV_SERVER_URL);
-  } else {
-    window.loadFile(join(import.meta.dirname, "../../dist/index.html"));
-  }
-  return window;
+  return t.once("ready-to-show", () => t.show()), t.webContents.on("did-fail-load", (r, n, i) => {
+    console.error(
+      `Renderer failed to load (${n}): ${i}`
+    );
+  }), (process.env.VITE_DEV_SERVER_URL ? t.loadURL(process.env.VITE_DEV_SERVER_URL) : t.loadFile(h(import.meta.dirname, "../../dist/index.html"))).catch((r) => {
+    console.error(`Renderer failed to load: ${r.message}`);
+  }), t;
 }
-if (!app.requestSingleInstanceLock()) {
-  app.quit();
-} else {
-  const enginePaths = getEnginePaths();
-  const sessionDataPath = join(enginePaths.appData, "session-data");
-  mkdirSync(enginePaths.appData, { recursive: true });
-  mkdirSync(enginePaths.cache, { recursive: true });
-  mkdirSync(sessionDataPath, { recursive: true });
-  app.setPath("userData", enginePaths.appData);
-  app.setPath("cache", enginePaths.cache);
-  app.setPath("sessionData", sessionDataPath);
-  const logger = createLogger(enginePaths.appData);
-  const engine = new EngineManager(logger);
-  let mainWindow;
-  let shutdownPromise;
-  let quitRequested = false;
-  let quitApproved = false;
-  app.on("second-instance", () => {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      return;
-    }
-    if (mainWindow.isMinimized()) {
-      mainWindow.restore();
-    }
-    mainWindow.show();
-    mainWindow.focus();
-  });
-  app.whenReady().then(async () => {
-    if (quitRequested) {
-      return;
-    }
-    logger.info("app", "application ready");
-    registerHandlers(engine, logger);
-    registerEngineEvents(engine, logger, () => mainWindow);
-    mainWindow = createWindow();
-    try {
-      await engine.start();
-    } catch (error) {
-      if (!quitRequested) {
-        logger.error("app", `engine startup failed: ${error.message}`);
-      }
-    }
-    if (quitRequested) {
-      return;
-    }
-    app.on("activate", () => {
-      if (!mainWindow || mainWindow.isDestroyed()) {
-        mainWindow = createWindow();
-      }
-    });
-  });
-  app.on("before-quit", (event) => {
-    quitRequested = true;
-    if (quitApproved) {
-      return;
-    }
-    event.preventDefault();
-    if (shutdownPromise) {
-      return;
-    }
-    logger.info("app", "application quitting");
-    shutdownPromise = engine.stop().catch((error) => {
-      logger.error("app", `engine shutdown failed: ${error.message}`);
-    });
-    shutdownPromise.finally(() => {
-      quitApproved = true;
-      app.quit();
-    });
-  });
-  app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") {
-      app.quit();
-    }
+if (!f.requestSingleInstanceLock())
+  f.quit();
+else {
+  const t = N(), e = h(t.appData, "session-data");
+  T(t.appData, { recursive: !0 }), T(t.cache, { recursive: !0 }), T(e, { recursive: !0 }), f.setPath("userData", t.appData), f.setPath("cache", t.cache), f.setPath("sessionData", e);
+  const r = Te(t.appData), n = new ue(r);
+  let i, s, a = !1, o = !1;
+  f.on("second-instance", () => {
+    !i || i.isDestroyed() || (i.isMinimized() && i.restore(), i.show(), i.focus());
+  }), f.whenReady().then(() => {
+    a || (r.info("app", "application ready"), Pe(n, r), le(n, r, () => i), i = H(), n.start().catch((d) => {
+      a || r.error("app", `engine startup failed: ${d.message}`);
+    }), f.on("activate", () => {
+      (!i || i.isDestroyed()) && (i = H());
+    }));
+  }), f.on("before-quit", (d) => {
+    a = !0, !o && (d.preventDefault(), !s && (r.info("app", "application quitting"), s = n.stop().catch((c) => {
+      r.error("app", `engine shutdown failed: ${c.message}`);
+    }), s.finally(() => {
+      o = !0, f.quit();
+    })));
+  }), f.on("window-all-closed", () => {
+    process.platform !== "darwin" && f.quit();
   });
 }

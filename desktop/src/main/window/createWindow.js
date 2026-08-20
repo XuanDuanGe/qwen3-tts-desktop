@@ -9,6 +9,7 @@ export function createWindow() {
     minWidth: 800,
     minHeight: 600,
     frame: false,
+    show: false,
     webPreferences: {
       preload: join(import.meta.dirname, 'index.mjs'),
       nodeIntegration: false,
@@ -18,11 +19,18 @@ export function createWindow() {
     },
   });
 
-  if (process.env.VITE_DEV_SERVER_URL) {
-    window.loadURL(process.env.VITE_DEV_SERVER_URL);
-  } else {
-    window.loadFile(join(import.meta.dirname, '../../dist/index.html'));
-  }
+  window.once('ready-to-show', () => window.show());
+  window.webContents.on('did-fail-load', (_, errorCode, errorDescription) => {
+    console.error(
+      `Renderer failed to load (${errorCode}): ${errorDescription}`,
+    );
+  });
+  const load = process.env.VITE_DEV_SERVER_URL
+    ? window.loadURL(process.env.VITE_DEV_SERVER_URL)
+    : window.loadFile(join(import.meta.dirname, '../../dist/index.html'));
+  void load.catch((error) => {
+    console.error(`Renderer failed to load: ${error.message}`);
+  });
 
   return window;
 }

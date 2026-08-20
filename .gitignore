@@ -21,6 +21,7 @@ coverage/
 .vite/
 
 # Electron build and packaging output
+.build/
 out/
 release/
 app-builds/
@@ -99,3 +100,4 @@ cache/
 temp/
 
 samples/
+.zcode/
